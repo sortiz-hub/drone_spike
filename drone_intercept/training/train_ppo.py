@@ -18,6 +18,7 @@ def make_env(
     target_speed: float = 5.0,
     dt: float = 0.1,
     max_steps: int = 1000,
+    sensing_mode: str = "truth",
 ) -> InterceptEnv:
     from drone_intercept.env.termination import TerminationConfig
 
@@ -28,6 +29,7 @@ def make_env(
             target_speed=target_speed,
             dt=dt,
             termination=cfg,
+            sensing_mode=sensing_mode,
         )
     )
 
@@ -44,10 +46,15 @@ def train(
     save_dir: str = "models",
     log_dir: str = "logs",
     seed: int = 42,
+    sensing_mode: str = "truth",
 ) -> PPO:
     """Train a PPO policy on the interception environment."""
     env = make_vec_env(
-        lambda: make_env(target_behavior=target_behavior, target_speed=target_speed),
+        lambda: make_env(
+            target_behavior=target_behavior,
+            target_speed=target_speed,
+            sensing_mode=sensing_mode,
+        ),
         n_envs=n_envs,
         seed=seed,
     )
@@ -91,6 +98,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-dir", type=str, default="models")
     parser.add_argument("--log-dir", type=str, default="logs")
+    parser.add_argument(
+        "--sensing-mode", type=str, default="truth",
+        choices=["truth", "tracked"],
+        help="Sensing mode: truth (Phase 1) or tracked (Phase 2)",
+    )
     args = parser.parse_args()
 
     train(
@@ -103,6 +115,7 @@ def main() -> None:
         save_dir=args.save_dir,
         log_dir=args.log_dir,
         seed=args.seed,
+        sensing_mode=args.sensing_mode,
     )
 
 

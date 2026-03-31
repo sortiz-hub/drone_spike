@@ -22,6 +22,7 @@ def evaluate(
     log_dir: str = "logs/eval",
     plot: bool = True,
     seed: int = 0,
+    sensing_mode: str = "truth",
 ) -> dict:
     """Run evaluation episodes and return aggregate metrics."""
     cfg = TerminationConfig()
@@ -29,6 +30,7 @@ def evaluate(
         target_behavior=target_behavior,
         target_speed=target_speed,
         termination=cfg,
+        sensing_mode=sensing_mode,
     )
     model = PPO.load(model_path)
     logger = EpisodeLogger(log_dir=log_dir)
@@ -102,6 +104,11 @@ def main() -> None:
     parser.add_argument("--log-dir", type=str, default="logs/eval")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--sensing-mode", type=str, default="truth",
+        choices=["truth", "tracked"],
+        help="Sensing mode: truth (Phase 1) or tracked (Phase 2)",
+    )
     args = parser.parse_args()
 
     evaluate(
@@ -112,6 +119,7 @@ def main() -> None:
         log_dir=args.log_dir,
         plot=not args.no_plot,
         seed=args.seed,
+        sensing_mode=args.sensing_mode,
     )
 
 
