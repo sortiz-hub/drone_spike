@@ -139,7 +139,7 @@ obs = {
 
 **Goal:** Add target prediction to enable lead pursuit / smarter interception strategies.
 
-**Status:** `not-started`
+**Status:** `implemented`
 
 **Key changes:**
 - Predictor node (constant velocity initially, learned later)
