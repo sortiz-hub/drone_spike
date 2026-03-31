@@ -1,6 +1,6 @@
 # drone_spike Documentation
 
-Drone interception RL spike — training pursuit-evasion policies with PX4 + Gazebo + ROS 2 + Gymnasium + SB3.
+Drone interception RL spike — training pursuit-evasion policies with Gymnasium + SB3.
 
 **Last Updated:** 2026-03-31
 
@@ -12,8 +12,11 @@ Drone interception RL spike — training pursuit-evasion policies with PX4 + Gaz
 .agent/
 ├── README.md                          # This file – documentation index
 ├── system/
-│   └── project_architecture.md        # Architecture overview
-├── sop/                               # Standard Operating Procedures (TBD)
+│   └── project_architecture.md        # Architecture, obs/action/reward, project structure
+├── sop/
+│   └── development/
+│       ├── local-setup.md             # Installation, virtual env, smoke test
+│       └── training-and-evaluation.md # Train, eval, view logs/plots, CLI reference
 └── specs/
     ├── SPEC025-drone-interception-rl/  # Interception RL spec (4 phases)
     │   ├── requirements.md            # Requirements & user stories
@@ -28,9 +31,20 @@ Drone interception RL spike — training pursuit-evasion policies with PX4 + Gaz
 
 ## Quick Start
 
-1. **Understand the project**: Read [system/project_architecture.md](system/project_architecture.md)
-2. **Current spec**: Review [specs/SPEC025-drone-interception-rl/](specs/SPEC025-drone-interception-rl/)
-3. **Blueprint reference**: Full technical guide in [specs/SPEC025-drone-interception-rl/blueprint-reference.md](specs/SPEC025-drone-interception-rl/blueprint-reference.md)
+1. **Install**: `pip install -e ".[dev]"` — see [sop/development/local-setup.md](sop/development/local-setup.md)
+2. **Train**: `python -m drone_intercept.training.train_ppo --timesteps 500000`
+3. **Evaluate**: `python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip`
+4. **View plots**: Open `logs/eval/plot_episode_XXXXX.png` or use `plot_episode_from_file()`
+
+Full training/eval reference: [sop/development/training-and-evaluation.md](sop/development/training-and-evaluation.md)
+
+## Architecture & Design
+
+- [system/project_architecture.md](system/project_architecture.md) — Runtime architecture, project structure, observation/action/reward reference, design decisions
+
+## Current Status
+
+**Phase 1 (Cheated Interception)** is implemented with simplified dynamics (no PX4/Gazebo dependency). Ready for training.
 
 ## Parent Repository
 
