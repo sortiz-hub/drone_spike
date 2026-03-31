@@ -2,6 +2,7 @@
 
 Phase 1 — simplified dynamics with truth sensing.
 Phase 2 — adds noisy detections + Kalman tracker.
+Phase 3 — adds obstacles with sector-distance perception.
 """
 
 from __future__ import annotations
@@ -41,8 +42,8 @@ class InterceptEnv(gym.Env):
     the dynamics layer can be swapped for ROS 2 + PX4 SITL later.
 
     Args:
-        sensing_mode: "truth" for Phase 1 (simulator truth) or
-                      "tracked" for Phase 2 (noisy detections + Kalman filter).
+        sensing_mode: "truth" for Phase 1 or "tracked" for Phase 2.
+        obstacle_config: If provided, enables Phase 3 obstacles.
     """
 
     metadata = {"render_modes": ["human"]}
@@ -57,6 +58,7 @@ class InterceptEnv(gym.Env):
         sensing_mode: str = "truth",
         noise_config: Any | None = None,
         tracker_config: Any | None = None,
+        obstacle_config: Any | None = None,
     ) -> None:
         super().__init__()
         self.dt = dt
@@ -82,9 +84,25 @@ class InterceptEnv(gym.Env):
             self._noise_cfg = noise_config or NoiseConfig()
             self._tracker = KalmanTracker(tracker_config or TrackerConfig())
 
+        # Phase 3: obstacles
+        self._obstacle_cfg = None
+        self._obstacles: list = []
+        n_obstacle_sectors = 0
+        perception_range = 20.0
+        if obstacle_config is not None:
+            from drone_intercept.sim.obstacles import ObstacleConfig
+
+            self._obstacle_cfg = obstacle_config if not isinstance(obstacle_config, bool) else ObstacleConfig()
+            n_obstacle_sectors = self._obstacle_cfg.n_sectors
+            perception_range = self._obstacle_cfg.perception_range
+
         # Spaces
         phase = 2 if sensing_mode == "tracked" else 1
-        self.observation_space = observation_builder.observation_space(phase=phase)
+        self.observation_space = observation_builder.observation_space(
+            phase=phase,
+            n_obstacle_sectors=n_obstacle_sectors,
+            perception_range=perception_range,
+        )
         self.action_space = gym.spaces.Box(
             low=np.array([-_MAX_VEL, -_MAX_VEL, -_MAX_VEL, -_MAX_YAW_RATE], dtype=np.float32),
             high=np.array([_MAX_VEL, _MAX_VEL, _MAX_VEL, _MAX_YAW_RATE], dtype=np.float32),
@@ -128,6 +146,14 @@ class InterceptEnv(gym.Env):
         # Reset tracker
         if self._tracker is not None:
             self._tracker.reset()
+
+        # Generate obstacles (Phase 3)
+        if self._obstacle_cfg is not None:
+            from drone_intercept.sim.obstacles import generate_obstacles
+
+            self._obstacles = generate_obstacles(self._rng, self._obstacle_cfg)
+        else:
+            self._obstacles = []
 
         obs = self._build_obs()
         info = self._build_info(reason="")
@@ -173,6 +199,21 @@ class InterceptEnv(gym.Env):
 
         self._step_count += 1
 
+        # Obstacle collision check (Phase 3)
+        obstacle_crashed = False
+        min_obstacle_dist = None
+        if self._obstacles:
+            from drone_intercept.sim.obstacles import (
+                check_obstacle_collision,
+                compute_sector_distances,
+            )
+
+            obstacle_crashed = check_obstacle_collision(self._drone_pos, self._obstacles)
+            sector_dists = compute_sector_distances(
+                self._drone_pos, self._obstacles, self._obstacle_cfg,
+            )
+            min_obstacle_dist = float(np.min(sector_dists))
+
         # Termination (always uses true state for ground truth)
         term = check_termination(
             self._drone_pos,
@@ -182,6 +223,10 @@ class InterceptEnv(gym.Env):
             self._step_count,
             self.term_cfg,
         )
+        if obstacle_crashed and not term.terminated:
+            term.terminated = True
+            term.reason = "crash_obstacle"
+
         captured = term.reason == "capture"
         crashed = term.reason.startswith("crash")
 
@@ -193,6 +238,8 @@ class InterceptEnv(gym.Env):
             captured=captured,
             crashed=crashed,
             altitude=float(self._drone_pos[2]),
+            min_obstacle_distance=min_obstacle_dist,
+            obstacle_crashed=obstacle_crashed,
         )
 
         obs = self._build_obs()
@@ -216,6 +263,16 @@ class InterceptEnv(gym.Env):
             )
         return self._target.position, self._target.velocity, None
 
+    def _get_sector_distances(self) -> np.ndarray | None:
+        """Return obstacle sector distances if obstacles are active."""
+        if not self._obstacles or self._obstacle_cfg is None:
+            return None
+        from drone_intercept.sim.obstacles import compute_sector_distances
+
+        return compute_sector_distances(
+            self._drone_pos, self._obstacles, self._obstacle_cfg,
+        )
+
     def _build_obs(self) -> np.ndarray:
         target_pos, target_vel, confidence = self._get_sensed_target()
         return observation_builder.build_observation(
@@ -225,6 +282,7 @@ class InterceptEnv(gym.Env):
             target_vel=target_vel,
             battery=self._battery,
             track_confidence=confidence,
+            sector_distances=self._get_sector_distances(),
         )
 
     def _build_info(self, reason: str) -> dict[str, Any]:
@@ -242,4 +300,9 @@ class InterceptEnv(gym.Env):
             info["tracked_pos"] = self._tracker.position.copy()
             info["tracked_vel"] = self._tracker.velocity.copy()
             info["track_confidence"] = self._tracker.confidence
+        if self._obstacles:
+            sector_dists = self._get_sector_distances()
+            if sector_dists is not None:
+                info["sector_distances"] = sector_dists.tolist()
+                info["min_obstacle_distance"] = float(np.min(sector_dists))
         return info
