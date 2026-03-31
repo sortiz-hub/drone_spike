@@ -20,6 +20,7 @@ def make_env(
     max_steps: int = 1000,
     sensing_mode: str = "truth",
     obstacles: bool = False,
+    prediction: bool = False,
 ) -> InterceptEnv:
     from drone_intercept.env.termination import TerminationConfig
 
@@ -28,6 +29,10 @@ def make_env(
     if obstacles:
         from drone_intercept.sim.obstacles import ObstacleConfig
         obstacle_config = ObstacleConfig()
+    predictor_config = None
+    if prediction:
+        from drone_intercept.sim.predictor import PredictorConfig
+        predictor_config = PredictorConfig()
     return Monitor(
         InterceptEnv(
             target_behavior=target_behavior,
@@ -36,6 +41,7 @@ def make_env(
             termination=cfg,
             sensing_mode=sensing_mode,
             obstacle_config=obstacle_config,
+            predictor_config=predictor_config,
         )
     )
 
@@ -54,6 +60,7 @@ def train(
     seed: int = 42,
     sensing_mode: str = "truth",
     obstacles: bool = False,
+    prediction: bool = False,
 ) -> PPO:
     """Train a PPO policy on the interception environment."""
     env = make_vec_env(
@@ -62,6 +69,7 @@ def train(
             target_speed=target_speed,
             sensing_mode=sensing_mode,
             obstacles=obstacles,
+            prediction=prediction,
         ),
         n_envs=n_envs,
         seed=seed,
@@ -115,6 +123,10 @@ def main() -> None:
         "--obstacles", action="store_true",
         help="Enable obstacles in the environment (Phase 3)",
     )
+    parser.add_argument(
+        "--prediction", action="store_true",
+        help="Enable target prediction in observation (Phase 4)",
+    )
     args = parser.parse_args()
 
     train(
@@ -129,6 +141,7 @@ def main() -> None:
         seed=args.seed,
         sensing_mode=args.sensing_mode,
         obstacles=args.obstacles,
+        prediction=args.prediction,
     )
 
 

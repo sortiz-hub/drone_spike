@@ -3,6 +3,7 @@
 Phase 1 — simplified dynamics with truth sensing.
 Phase 2 — adds noisy detections + Kalman tracker.
 Phase 3 — adds obstacles with sector-distance perception.
+Phase 4 — adds target prediction for lead pursuit.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ class InterceptEnv(gym.Env):
     Args:
         sensing_mode: "truth" for Phase 1 or "tracked" for Phase 2.
         obstacle_config: If provided, enables Phase 3 obstacles.
+        predictor_config: If provided, enables Phase 4 target prediction.
     """
 
     metadata = {"render_modes": ["human"]}
@@ -59,6 +61,7 @@ class InterceptEnv(gym.Env):
         noise_config: Any | None = None,
         tracker_config: Any | None = None,
         obstacle_config: Any | None = None,
+        predictor_config: Any | None = None,
     ) -> None:
         super().__init__()
         self.dt = dt
@@ -96,12 +99,24 @@ class InterceptEnv(gym.Env):
             n_obstacle_sectors = self._obstacle_cfg.n_sectors
             perception_range = self._obstacle_cfg.perception_range
 
+        # Phase 4: predictor
+        self._predictor = None
+        n_predictions = 0
+        if predictor_config is not None:
+            from drone_intercept.sim.predictor import ConstantVelocityPredictor, PredictorConfig
+
+            self._predictor = ConstantVelocityPredictor(
+                predictor_config if not isinstance(predictor_config, bool) else PredictorConfig()
+            )
+            n_predictions = self._predictor.n_predictions
+
         # Spaces
         phase = 2 if sensing_mode == "tracked" else 1
         self.observation_space = observation_builder.observation_space(
             phase=phase,
             n_obstacle_sectors=n_obstacle_sectors,
             perception_range=perception_range,
+            n_predictions=n_predictions,
         )
         self.action_space = gym.spaces.Box(
             low=np.array([-_MAX_VEL, -_MAX_VEL, -_MAX_VEL, -_MAX_YAW_RATE], dtype=np.float32),
@@ -273,6 +288,13 @@ class InterceptEnv(gym.Env):
             self._drone_pos, self._obstacles, self._obstacle_cfg,
         )
 
+    def _get_predictions(self) -> list[np.ndarray] | None:
+        """Return predicted target positions if predictor is active."""
+        if self._predictor is None:
+            return None
+        target_pos, target_vel, _ = self._get_sensed_target()
+        return self._predictor.predict(target_pos, target_vel)
+
     def _build_obs(self) -> np.ndarray:
         target_pos, target_vel, confidence = self._get_sensed_target()
         return observation_builder.build_observation(
@@ -283,6 +305,7 @@ class InterceptEnv(gym.Env):
             battery=self._battery,
             track_confidence=confidence,
             sector_distances=self._get_sector_distances(),
+            predicted_positions=self._get_predictions(),
         )
 
     def _build_info(self, reason: str) -> dict[str, Any]:
@@ -305,4 +328,8 @@ class InterceptEnv(gym.Env):
             if sector_dists is not None:
                 info["sector_distances"] = sector_dists.tolist()
                 info["min_obstacle_distance"] = float(np.min(sector_dists))
+        if self._predictor is not None:
+            preds = self._get_predictions()
+            if preds is not None:
+                info["predicted_positions"] = [p.tolist() for p in preds]
         return info
