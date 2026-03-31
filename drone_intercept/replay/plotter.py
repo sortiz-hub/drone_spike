@@ -1,9 +1,10 @@
-"""2D top-down trajectory plotter for episode replay."""
+"""2D top-down trajectory plotter and video exporter for episode replay."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -77,6 +78,96 @@ def plot_episode(
         plt.show()
     else:
         plt.close(fig)
+
+
+def animate_episode(
+    steps: list[StepRecord],
+    save_path: str | Path = "episode.mp4",
+    fps: int = 10,
+    title: str = "Episode Replay",
+) -> None:
+    """Animate a 2D top-down episode replay and save as video.
+
+    Uses matplotlib.animation — no Gazebo or simulator required.
+    Supports .mp4 (ffmpeg) and .gif (pillow).
+    """
+    drone_x = [s.drone_pos[0] for s in steps]
+    drone_y = [s.drone_pos[1] for s in steps]
+    target_x = [s.target_pos[0] for s in steps]
+    target_y = [s.target_pos[1] for s in steps]
+    distances = [s.distance for s in steps]
+
+    fig, (ax_traj, ax_dist) = plt.subplots(1, 2, figsize=(14, 6))
+
+    # Compute axis limits with padding
+    all_x = drone_x + target_x
+    all_y = drone_y + target_y
+    pad = max(5.0, 0.1 * (max(all_x) - min(all_x)), 0.1 * (max(all_y) - min(all_y)))
+    ax_traj.set_xlim(min(all_x) - pad, max(all_x) + pad)
+    ax_traj.set_ylim(min(all_y) - pad, max(all_y) + pad)
+    ax_traj.set_aspect("equal")
+    ax_traj.set_xlabel("X (m)")
+    ax_traj.set_ylabel("Y (m)")
+    ax_traj.set_title("Top-Down Trajectory")
+    ax_traj.grid(True, alpha=0.3)
+
+    ax_dist.set_xlim(0, len(steps))
+    ax_dist.set_ylim(0, max(distances) * 1.1)
+    ax_dist.axhline(y=1.5, color="g", linestyle="--", alpha=0.5, label="Capture dist")
+    ax_dist.set_xlabel("Step")
+    ax_dist.set_ylabel("Distance (m)")
+    ax_dist.set_title("Distance Over Time")
+    ax_dist.legend(fontsize=8)
+    ax_dist.grid(True, alpha=0.3)
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    plt.tight_layout()
+
+    # Animated artists
+    (drone_trail,) = ax_traj.plot([], [], "b-", linewidth=1.5, label="Drone")
+    (target_trail,) = ax_traj.plot([], [], "r--", linewidth=1.5, label="Target")
+    (drone_dot,) = ax_traj.plot([], [], "bo", markersize=8)
+    (target_dot,) = ax_traj.plot([], [], "r^", markersize=8)
+    (dist_line,) = ax_dist.plot([], [], "k-", linewidth=1)
+    ax_traj.legend(fontsize=8)
+
+    def update(frame: int):  # noqa: ANN202
+        i = frame + 1
+        drone_trail.set_data(drone_x[:i], drone_y[:i])
+        target_trail.set_data(target_x[:i], target_y[:i])
+        drone_dot.set_data([drone_x[frame]], [drone_y[frame]])
+        target_dot.set_data([target_x[frame]], [target_y[frame]])
+        dist_line.set_data(np.arange(i), distances[:i])
+        return drone_trail, target_trail, drone_dot, target_dot, dist_line
+
+    anim = animation.FuncAnimation(
+        fig, update, frames=len(steps), interval=1000 // fps, blit=True,
+    )
+
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    suffix = save_path.suffix.lower()
+    if suffix == ".gif":
+        anim.save(str(save_path), writer="pillow", fps=fps)
+    elif animation.writers.is_available("ffmpeg"):
+        anim.save(str(save_path), writer="ffmpeg", fps=fps)
+    else:
+        # Fallback: save as GIF when ffmpeg unavailable
+        fallback = save_path.with_suffix(".gif")
+        anim.save(str(fallback), writer="pillow", fps=fps)
+        print(f"ffmpeg not found — saved as {fallback} instead")
+    plt.close(fig)
+
+
+def animate_episode_from_file(
+    jsonl_path: str | Path,
+    save_path: str | Path = "episode.mp4",
+    fps: int = 10,
+) -> None:
+    """Load a JSONL episode file and export as video."""
+    steps = EpisodeLogger.load_episode(jsonl_path)
+    name = Path(jsonl_path).stem
+    animate_episode(steps, save_path=save_path, fps=fps, title=name)
 
 
 def plot_episode_from_file(
