@@ -51,6 +51,7 @@ drone_spike/
         zigzag.py                # Zigzag evasion target
       noise.py                   # Gaussian noise injection (Phase 2)
       tracker.py                 # Kalman filter target tracker (Phase 2)
+      obstacles.py               # Obstacle generation + sector perception (Phase 3)
     env/
       intercept_env.py           # Gymnasium environment (InterceptEnv)
       observation_builder.py     # Observation vector assembly (14D/15D)
@@ -94,7 +95,7 @@ drone_spike/
 |-------|-------|---------|--------|
 | 1 - Cheated Interception (MVP) | Basic pursuit in open space | Simulator truth | **Implemented** |
 | 2 - Tracked Target | Pursuit under uncertainty | Noisy detections + Kalman | **Implemented** |
-| 3 - Obstacle-Aware | Safe pursuit | Depth/occupancy + tracked target | Not started |
+| 3 - Obstacle-Aware | Safe pursuit | Sector distances + tracked target | **Implemented** |
 | 4 - Prediction-Aware | Lead pursuit | Predicted target trajectory | Not started |
 
 See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed milestones.
@@ -107,7 +108,7 @@ See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed mile
 | Phase 1 dynamics | Simplified first-order lag | Instant training, no simulator setup; swap later |
 | Velocity tracking tau | 0.3s time constant | Mimics realistic autopilot response lag |
 | Action space | Continuous velocity + yaw rate | Natural PX4 Offboard interface |
-| Observation | 14D (Phase 1) / 15D (Phase 2) | Fast training; no images initially |
+| Observation | 14D / 15D / 22D / 23D (phase-dependent) | Compact vector; grows with phase |
 | Algorithm | PPO | Proven for continuous control; simple SB3 baseline |
 | Targets | Scripted behaviors | Debuggable curriculum before adversarial |
 
@@ -133,6 +134,16 @@ Extends Phase 1 with tracker output instead of truth state:
 | 0-13 | (same as Phase 1) | | rel_target uses tracked estimate |
 | 14 | track_confidence | [0, 1] | Kalman tracker confidence |
 
+### Observation — Phase 3 (adds obstacle sectors)
+
+Appends sector distances to the Phase 1 or Phase 2 vector:
+
+| Index | Field | Range | Description |
+|-------|-------|-------|-------------|
+| 14 or 15 | sector_0 .. sector_N | [0, 20] m | Distance to nearest obstacle per angular sector |
+
+Total dimensions: 22 (truth+obstacles) or 23 (tracked+obstacles) with 8 default sectors.
+
 ### Action (4D continuous)
 
 | Index | Field | Range | Unit |
@@ -148,8 +159,9 @@ Extends Phase 1 with tracker output instead of truth state:
 r = -0.1 * distance
     - 0.01 * control_effort
     - 0.05 * collision_risk (altitude < 1.0m)
+    - 0.1 * obstacle_proximity (within 3m, Phase 3)
     + 100.0 (capture)
-    - 100.0 (crash)
+    - 100.0 (crash or obstacle collision)
 ```
 
 ### Termination
@@ -159,5 +171,6 @@ r = -0.1 * distance
 | Capture | dist < 1.5m AND rel_speed < 2.0 m/s | terminated |
 | Crash (ground) | altitude < 0.3m | terminated |
 | Crash (ceiling) | altitude > 50m | terminated |
+| Crash (obstacle) | collides with obstacle (Phase 3) | terminated |
 | Out of bounds | horiz_dist > 100m | terminated |
 | Timeout | step >= 1000 | truncated |

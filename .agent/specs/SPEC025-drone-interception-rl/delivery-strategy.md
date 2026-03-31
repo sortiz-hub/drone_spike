@@ -110,7 +110,7 @@ obs = {
 
 **Goal:** Add obstacles to the environment and local obstacle perception to the observation. Policy learns safe pursuit.
 
-**Status:** `not-started`
+**Status:** `implemented`
 
 **Key changes:**
 - Gazebo worlds with static obstacles
