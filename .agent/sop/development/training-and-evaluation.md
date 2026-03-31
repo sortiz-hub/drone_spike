@@ -41,12 +41,23 @@ python -m drone_intercept.training.train_ppo \
 | `--seed` | 42 | Random seed |
 | `--save-dir` | `models` | Checkpoint directory |
 | `--log-dir` | `logs` | Log directory |
+| `--sensing-mode` | `truth` | `truth` (Phase 1) or `tracked` (Phase 2) |
 
 ### Training Output
 
 - **Checkpoints**: `models/ppo_intercept_{timestep}` every 50k steps
 - **Final model**: `models/ppo_intercept_final.zip`
 - **Console**: Episode metrics every 50 episodes (avg reward, success rate)
+
+### Training with Tracked Sensing (Phase 2)
+
+```bash
+# Train with noisy detections + Kalman tracker (15D obs with track_confidence)
+python -m drone_intercept.training.train_ppo --timesteps 500000 --sensing-mode tracked
+
+# Evaluate Phase 2 policy
+python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip --sensing-mode tracked
+```
 
 ### Curriculum Training (Progressive Difficulty)
 
