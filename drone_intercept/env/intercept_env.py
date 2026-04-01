@@ -4,6 +4,8 @@ Phase 1 — simplified dynamics with truth sensing.
 Phase 2 — adds noisy detections + Kalman tracker.
 Phase 3 — adds obstacles with sector-distance perception.
 Phase 4 — adds target prediction for lead pursuit.
+
+Dynamics backend: "simplified" (default, no deps) or "gazebo" (ROS 2 + PX4).
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import numpy as np
 
 from drone_intercept.env import observation_builder, rewards
 from drone_intercept.env.termination import TerminationConfig, check_termination
+from drone_intercept.sim.dynamics import DynamicsBackend, get_dynamics
 from drone_intercept.sim.target_behaviors import (
     ConstantVelocityTarget,
     TargetBehavior,
@@ -28,21 +31,17 @@ _TARGET_REGISTRY: dict[str, type[TargetBehavior]] = {
     "zigzag": ZigzagTarget,
 }
 
-# Simplified drone dynamics constants
+# Action limits (shared across backends)
 _MAX_VEL = 10.0        # m/s per axis
 _MAX_YAW_RATE = 2.0    # rad/s
-_VEL_TAU = 0.3         # velocity tracking time constant (s)
-_GRAVITY = 9.81
 
 
 class InterceptEnv(gym.Env):
-    """Drone interception environment with simplified double-integrator dynamics.
-
-    The drone tracks commanded velocity via first-order lag (mimicking an
-    autopilot velocity controller). No PX4/Gazebo dependency — designed so
-    the dynamics layer can be swapped for ROS 2 + PX4 SITL later.
+    """Drone interception environment with pluggable dynamics backend.
 
     Args:
+        dynamics: "simplified" (first-order velocity lag, no deps) or
+                  "gazebo" (PX4 SITL via ROS 2).
         sensing_mode: "truth" for Phase 1 or "tracked" for Phase 2.
         obstacle_config: If provided, enables Phase 3 obstacles.
         predictor_config: If provided, enables Phase 4 target prediction.
@@ -62,12 +61,19 @@ class InterceptEnv(gym.Env):
         tracker_config: Any | None = None,
         obstacle_config: Any | None = None,
         predictor_config: Any | None = None,
+        dynamics: str | DynamicsBackend = "simplified",
     ) -> None:
         super().__init__()
         self.dt = dt
         self.render_mode = render_mode
         self.term_cfg = termination or TerminationConfig()
         self.sensing_mode = sensing_mode
+
+        # Dynamics backend
+        if isinstance(dynamics, DynamicsBackend):
+            self._dynamics = dynamics
+        else:
+            self._dynamics = get_dynamics(dynamics)
 
         # Target
         if target_behavior not in _TARGET_REGISTRY:
@@ -124,7 +130,7 @@ class InterceptEnv(gym.Env):
             dtype=np.float32,
         )
 
-        # State (set in reset)
+        # Cached drone state (read from dynamics backend)
         self._drone_pos = np.zeros(3, dtype=np.float32)
         self._drone_vel = np.zeros(3, dtype=np.float32)
         self._yaw = 0.0
@@ -141,18 +147,12 @@ class InterceptEnv(gym.Env):
         super().reset(seed=seed, options=options)
         self._rng = np.random.default_rng(seed)
 
-        # Drone starts near origin, hovering
-        self._drone_pos = np.array(
-            [
-                self._rng.uniform(-2.0, 2.0),
-                self._rng.uniform(-2.0, 2.0),
-                self._rng.uniform(2.0, 4.0),
-            ],
-            dtype=np.float32,
-        )
-        self._drone_vel = np.zeros(3, dtype=np.float32)
-        self._yaw = 0.0
-        self._battery = 1.0
+        # Reset dynamics backend
+        state = self._dynamics.reset(self._rng)
+        self._drone_pos = state.position
+        self._drone_vel = state.velocity
+        self._yaw = state.yaw
+        self._battery = state.battery
         self._step_count = 0
 
         # Reset target
@@ -179,24 +179,14 @@ class InterceptEnv(gym.Env):
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         action = np.clip(action, self.action_space.low, self.action_space.high)
         vel_cmd = action[:3]
-        yaw_rate_cmd = action[3]
+        yaw_rate_cmd = float(action[3])
 
-        # First-order velocity tracking (simplified autopilot)
-        alpha = 1.0 - np.exp(-self.dt / _VEL_TAU)
-        self._drone_vel = (
-            self._drone_vel + alpha * (vel_cmd - self._drone_vel)
-        ).astype(np.float32)
-
-        # Integrate position
-        self._drone_pos = (self._drone_pos + self._drone_vel * self.dt).astype(
-            np.float32
-        )
-
-        # Yaw
-        self._yaw += float(yaw_rate_cmd) * self.dt
-
-        # Battery drain (simple linear)
-        self._battery = max(0.0, self._battery - 0.0002)
+        # Advance dynamics via backend
+        state = self._dynamics.step(vel_cmd, yaw_rate_cmd, self.dt)
+        self._drone_pos = state.position
+        self._drone_vel = state.velocity
+        self._yaw = state.yaw
+        self._battery = state.battery
 
         # Advance target
         self._target.step(self.dt)
@@ -263,6 +253,10 @@ class InterceptEnv(gym.Env):
         info["captured"] = captured
 
         return obs, reward, term.terminated, term.truncated, info
+
+    def close(self) -> None:
+        self._dynamics.close()
+        super().close()
 
     # ------------------------------------------------------------------
     # Internal helpers

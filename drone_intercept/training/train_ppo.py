@@ -21,6 +21,7 @@ def make_env(
     sensing_mode: str = "truth",
     obstacles: bool = False,
     prediction: bool = False,
+    dynamics: str = "simplified",
 ) -> InterceptEnv:
     from drone_intercept.env.termination import TerminationConfig
 
@@ -42,6 +43,7 @@ def make_env(
             sensing_mode=sensing_mode,
             obstacle_config=obstacle_config,
             predictor_config=predictor_config,
+            dynamics=dynamics,
         )
     )
 
@@ -61,6 +63,7 @@ def train(
     sensing_mode: str = "truth",
     obstacles: bool = False,
     prediction: bool = False,
+    dynamics: str = "simplified",
 ) -> PPO:
     """Train a PPO policy on the interception environment."""
     env = make_vec_env(
@@ -70,6 +73,7 @@ def train(
             sensing_mode=sensing_mode,
             obstacles=obstacles,
             prediction=prediction,
+            dynamics=dynamics,
         ),
         n_envs=n_envs,
         seed=seed,
@@ -127,6 +131,11 @@ def main() -> None:
         "--prediction", action="store_true",
         help="Enable target prediction in observation (Phase 4)",
     )
+    parser.add_argument(
+        "--dynamics", type=str, default="simplified",
+        choices=["simplified", "gazebo"],
+        help="Dynamics backend: simplified (no deps) or gazebo (ROS 2 + PX4)",
+    )
     args = parser.parse_args()
 
     train(
@@ -142,6 +151,7 @@ def main() -> None:
         sensing_mode=args.sensing_mode,
         obstacles=args.obstacles,
         prediction=args.prediction,
+        dynamics=args.dynamics,
     )
 
 

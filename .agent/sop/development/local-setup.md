@@ -92,3 +92,55 @@ print(f'Captures: {captures}/10 (expect 10/10)')
 | matplotlib | >=3.7 | Trajectory plots |
 | pytest | >=7.0 | Testing (dev) |
 | ruff | >=0.1 | Linting (dev) |
+| rclpy | (system) | ROS 2 Python client (gazebo) |
+| px4-msgs | (system) | PX4 message definitions (gazebo) |
+
+## Gazebo / PX4 Setup (Optional)
+
+The Gazebo dynamics backend (`--dynamics gazebo`) requires PX4 SITL, Gazebo, and ROS 2. This is **optional** — the default `simplified` backend has no extra dependencies.
+
+### 1. Install ROS 2 and Gazebo
+
+Follow the official guides:
+- [ROS 2 Humble installation](https://docs.ros.org/en/humble/Installation.html)
+- [Gazebo Garden installation](https://gazebosim.org/docs/garden/install)
+
+### 2. Install PX4 SITL
+
+```bash
+git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+cd PX4-Autopilot
+bash Tools/setup/ubuntu.sh
+make px4_sitl gz_x500
+```
+
+### 3. Install micro-XRCE-DDS Agent
+
+```bash
+git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
+cd Micro-XRCE-DDS-Agent && mkdir build && cd build
+cmake .. && make && sudo make install
+# Run the agent (connects PX4 to ROS 2):
+MicroXRCEAgent udp4 -p 8888
+```
+
+### 4. Install Gazebo Python Dependencies
+
+```bash
+pip install -e ".[gazebo]"
+```
+
+### 5. Verify Gazebo Backend
+
+With PX4 SITL and the DDS agent running:
+
+```bash
+python -c "
+from drone_intercept.sim.dynamics import get_dynamics
+backend = get_dynamics('gazebo')
+print('Gazebo backend initialized OK')
+backend.close()
+"
+```
+
+If rclpy or px4-msgs are not installed, importing the gazebo backend will raise an `ImportError` with installation instructions.

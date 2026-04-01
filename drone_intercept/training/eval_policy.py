@@ -25,6 +25,7 @@ def evaluate(
     sensing_mode: str = "truth",
     obstacles: bool = False,
     prediction: bool = False,
+    dynamics: str = "simplified",
 ) -> dict:
     """Run evaluation episodes and return aggregate metrics."""
     obstacle_config = None
@@ -43,6 +44,7 @@ def evaluate(
         sensing_mode=sensing_mode,
         obstacle_config=obstacle_config,
         predictor_config=predictor_config,
+        dynamics=dynamics,
     )
     model = PPO.load(model_path)
     logger = EpisodeLogger(log_dir=log_dir)
@@ -129,6 +131,11 @@ def main() -> None:
         "--prediction", action="store_true",
         help="Enable target prediction in observation (Phase 4)",
     )
+    parser.add_argument(
+        "--dynamics", type=str, default="simplified",
+        choices=["simplified", "gazebo"],
+        help="Dynamics backend: simplified (no deps) or gazebo (ROS 2 + PX4)",
+    )
     args = parser.parse_args()
 
     evaluate(
@@ -142,6 +149,7 @@ def main() -> None:
         sensing_mode=args.sensing_mode,
         obstacles=args.obstacles,
         prediction=args.prediction,
+        dynamics=args.dynamics,
     )
 
 

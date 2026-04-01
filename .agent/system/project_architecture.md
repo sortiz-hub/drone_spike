@@ -12,26 +12,34 @@ RL operates at the **decision/guidance layer** — not at the motor level. PX4 h
 
 ## 3. Runtime Architecture
 
-### Phase 1 (Current — Simplified Dynamics)
+### Pluggable Dynamics Backend
 
-The current implementation uses a first-order velocity lag model instead of PX4 SITL + Gazebo + ROS 2. This allows immediate training without simulator dependencies. The architecture is designed so the dynamics layer can be swapped for the full stack later.
+The environment uses a `DynamicsBackend` abstraction that decouples the RL layer from the physics engine. Select the backend via the `--dynamics` flag or the `dynamics` constructor parameter.
+
+#### Simplified Backend (`--dynamics simplified`, default)
+
+First-order velocity lag model. No external dependencies — trains immediately.
 
 ```
-Simplified physics (first-order velocity tracking)
+SimplifiedDynamics (first-order velocity tracking, tau=0.3s)
    ↕
 Gymnasium env wrapper (obs/action/reward/termination)
    ↕
 SB3 PPO (training) or trained policy (inference)
 ```
 
-### Phase 2+ (Planned — Full Stack)
+#### Gazebo Backend (`--dynamics gazebo`)
+
+Full PX4 SITL + Gazebo + ROS 2 stack. Requires `pip install -e ".[gazebo]"` (rclpy, px4-msgs) and a running PX4 SITL + micro-XRCE-DDS bridge.
 
 ```
 Gazebo world (physics, target, obstacles)
    ↕
 PX4 SITL (state estimation, stabilization, offboard)
    ↕
-ROS 2 nodes (perception, tracking, prediction, commands)
+ROS 2 / micro-XRCE-DDS bridge
+   ↕
+GazeboDynamics (offboard commands, state subscription, ENU↔NED conversion)
    ↕
 Gymnasium env wrapper (obs/action/reward/termination)
    ↕
@@ -44,6 +52,11 @@ SB3 PPO (training) or trained policy (inference)
 drone_spike/
   drone_intercept/               # Main Python package
     sim/
+      dynamics/
+        __init__.py              # get_dynamics() factory
+        base.py                  # DynamicsBackend ABC + DynamicsState dataclass
+        simplified.py            # SimplifiedDynamics (first-order velocity lag)
+        gazebo.py                # GazeboDynamics (PX4 SITL via ROS 2)
       target_behaviors/
         base.py                  # TargetBehavior ABC
         constant_velocity.py     # Straight-line target
@@ -65,7 +78,10 @@ drone_spike/
     replay/
       logger.py                  # Per-step JSONL logger + episode summaries
       plotter.py                 # 2D trajectory plots + video export
-    ros2_nodes/                  # ROS 2 integration (placeholder)
+    ros2_nodes/
+      offboard_command_node.py   # Publishes velocity setpoints to PX4 Offboard mode
+      vehicle_state_node.py      # Subscribes to PX4 vehicle local position (NED→ENU)
+      target_provider_node.py    # Target state from Gazebo topics or scripted injection
   models/                        # Saved policy checkpoints (gitignored)
   logs/                          # Training logs and episode data (gitignored)
   pyproject.toml                 # Package config + dependencies
@@ -75,20 +91,14 @@ drone_spike/
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Dynamics | Simplified first-order model (Phase 1) | Velocity tracking proxy |
+| Dynamics (default) | SimplifiedDynamics | First-order velocity lag (tau=0.3s), no deps |
+| Dynamics (optional) | GazeboDynamics + PX4 SITL + ROS 2 | Full physics via `--dynamics gazebo` |
 | RL interface | Gymnasium | `reset()` / `step()` / reward / termination |
 | Training | Stable-Baselines3 (PPO) | Policy optimization |
 | Logging | JSONL + CSV | Episode trajectory and summary data |
-| Visualization | matplotlib | 2D trajectory plots |
+| Visualization | matplotlib | 2D trajectory plots + video export |
 | Language | Python 3.10+ | All application code |
-
-### Future Stack (Phase 2+)
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Simulator | Gazebo | Physics, world, sensors |
-| Flight controller | PX4 SITL | State estimation, stabilization, offboard |
-| Middleware | ROS 2 | Node communication |
+| Middleware (optional) | ROS 2 + micro-XRCE-DDS | PX4 communication (`pip install -e ".[gazebo]"`) |
 
 ## 6. Phased Approach
 
@@ -106,7 +116,9 @@ See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed mile
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | RL layer | Decision/guidance, not motor control | Leverage PX4 for stabilization; faster convergence |
-| Phase 1 dynamics | Simplified first-order lag | Instant training, no simulator setup; swap later |
+| Dynamics abstraction | DynamicsBackend ABC with factory | `--dynamics simplified` (default) or `--dynamics gazebo`; lazy imports keep gazebo deps optional |
+| Phase 1 dynamics | SimplifiedDynamics (first-order lag) | Instant training, no simulator setup |
+| Gazebo dynamics | GazeboDynamics (PX4 SITL + ROS 2) | Full physics with ENU↔NED conversion; optional dependency |
 | Velocity tracking tau | 0.3s time constant | Mimics realistic autopilot response lag |
 | Action space | Continuous velocity + yaw rate | Natural PX4 Offboard interface |
 | Observation | 14D–29D (phase-dependent) | Compact vector; grows with phase features |

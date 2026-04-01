@@ -2,7 +2,7 @@
 
 Drone interception RL spike — training pursuit-evasion policies with Gymnasium + SB3.
 
-**Last Updated:** 2026-03-31
+**Last Updated:** 2026-04-01
 
 ---
 
@@ -44,10 +44,13 @@ Full training/eval reference: [sop/development/training-and-evaluation.md](sop/d
 
 ## Current Status
 
-**All four phases** are implemented with simplified dynamics (no PX4/Gazebo dependency):
+**All four phases** are implemented with a pluggable dynamics backend:
+- **Dynamics backend**: `--dynamics simplified` (default, no deps) or `--dynamics gazebo` (PX4 SITL + ROS 2)
 - Phase 2: noisy detections + Kalman filter (`--sensing-mode tracked`)
 - Phase 3: obstacles with sector-distance perception (`--obstacles`)
 - Phase 4: target prediction for lead pursuit (`--prediction`)
+
+Gazebo backend requires optional dependencies: `pip install -e ".[gazebo]"` (rclpy, px4-msgs).
 
 ## Parent Repository
 

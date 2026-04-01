@@ -44,6 +44,7 @@ python -m drone_intercept.training.train_ppo \
 | `--sensing-mode` | `truth` | `truth` (Phase 1) or `tracked` (Phase 2) |
 | `--obstacles` | (flag) | Enable obstacles (Phase 3) |
 | `--prediction` | (flag) | Enable target prediction (Phase 4) |
+| `--dynamics` | `simplified` | Dynamics backend: `simplified` (no deps) or `gazebo` (PX4 SITL + ROS 2) |
 
 ### Training Output
 
@@ -80,6 +81,22 @@ python -m drone_intercept.training.train_ppo --timesteps 500000 --prediction
 # Full stack: tracked + obstacles + prediction
 python -m drone_intercept.training.train_ppo --timesteps 500000 \
   --sensing-mode tracked --obstacles --prediction
+```
+
+### Training with Gazebo Backend
+
+Requires PX4 SITL + Gazebo running and the optional gazebo dependencies installed (`pip install -e ".[gazebo]"`). See [local-setup.md](local-setup.md) for setup instructions.
+
+```bash
+# Train with PX4 SITL physics (requires running PX4 + micro-XRCE-DDS bridge)
+python -m drone_intercept.training.train_ppo --timesteps 500000 --dynamics gazebo
+
+# Evaluate with Gazebo backend
+python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip --dynamics gazebo
+
+# Combine all phases with Gazebo
+python -m drone_intercept.training.train_ppo --timesteps 500000 \
+  --dynamics gazebo --sensing-mode tracked --obstacles --prediction
 ```
 
 ### Curriculum Training (Progressive Difficulty)
@@ -124,6 +141,10 @@ python -m drone_intercept.training.eval_policy \
 | `--log-dir` | `logs/eval` | Output directory |
 | `--no-plot` | (flag) | Skip trajectory plot generation |
 | `--seed` | 0 | Random seed |
+| `--sensing-mode` | `truth` | `truth` (Phase 1) or `tracked` (Phase 2) |
+| `--obstacles` | (flag) | Enable obstacles (Phase 3) |
+| `--prediction` | (flag) | Enable target prediction (Phase 4) |
+| `--dynamics` | `simplified` | Dynamics backend: `simplified` or `gazebo` |
 
 ### Evaluation Output
 
