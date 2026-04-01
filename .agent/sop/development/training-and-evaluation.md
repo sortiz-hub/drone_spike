@@ -42,6 +42,7 @@ python -m drone_intercept.training.train_ppo \
 | `--save-dir` | `models` | Checkpoint directory |
 | `--log-dir` | `logs` | Log directory |
 | `--sensing-mode` | `truth` | `truth` (Phase 1) or `tracked` (Phase 2) |
+| `--obstacles` | (flag) | Enable obstacles (Phase 3) |
 
 ### Training Output
 
@@ -57,6 +58,16 @@ python -m drone_intercept.training.train_ppo --timesteps 500000 --sensing-mode t
 
 # Evaluate Phase 2 policy
 python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip --sensing-mode tracked
+```
+
+### Training with Obstacles (Phase 3)
+
+```bash
+# Train with obstacles (8 cylindrical obstacles, 8-sector perception)
+python -m drone_intercept.training.train_ppo --timesteps 500000 --obstacles
+
+# Combine with tracked sensing (Phase 2+3)
+python -m drone_intercept.training.train_ppo --timesteps 500000 --sensing-mode tracked --obstacles
 ```
 
 ### Curriculum Training (Progressive Difficulty)

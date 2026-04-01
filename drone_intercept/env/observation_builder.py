@@ -2,6 +2,7 @@
 
 Phase 1: 14D (self pos/vel + relative target pos/vel + distance + battery)
 Phase 2: 15D (adds track_confidence)
+Phase 3: 15D + N_sectors (adds obstacle sector distances)
 """
 
 from __future__ import annotations
@@ -49,11 +50,16 @@ def _base_low_high() -> tuple[list[float], list[float]]:
     return low, high
 
 
-def observation_space(phase: int = 1) -> gym.spaces.Box:
+def observation_space(
+    phase: int = 1, n_obstacle_sectors: int = 0, perception_range: float = 20.0,
+) -> gym.spaces.Box:
     low, high = _base_low_high()
     if phase >= 2:
         low.append(0.0)   # track_confidence
         high.append(1.0)
+    if n_obstacle_sectors > 0:
+        low.extend([0.0] * n_obstacle_sectors)
+        high.extend([perception_range] * n_obstacle_sectors)
     return gym.spaces.Box(
         low=np.array(low, dtype=np.float32),
         high=np.array(high, dtype=np.float32),
@@ -68,6 +74,7 @@ def build_observation(
     target_vel: np.ndarray,
     battery: float,
     track_confidence: float | None = None,
+    sector_distances: np.ndarray | None = None,
 ) -> np.ndarray:
     rel_pos = target_pos - drone_pos
     rel_vel = target_vel - drone_vel
@@ -82,4 +89,6 @@ def build_observation(
     ]
     if track_confidence is not None:
         fields.append(track_confidence)
+    if sector_distances is not None:
+        fields.extend(sector_distances.tolist())
     return np.array(fields, dtype=np.float32)

@@ -44,7 +44,7 @@ Full training/eval reference: [sop/development/training-and-evaluation.md](sop/d
 
 ## Current Status
 
-**Phase 1 (Cheated Interception)** and **Phase 2 (Tracked Target)** are implemented with simplified dynamics (no PX4/Gazebo dependency). Phase 2 adds noisy detections + Kalman filter tracking via `--sensing-mode tracked`.
+**Phases 1–3** are implemented with simplified dynamics (no PX4/Gazebo dependency). Phase 2 adds noisy detections + Kalman filter (`--sensing-mode tracked`). Phase 3 adds obstacles with sector-distance perception (`--obstacles`).
 
 ## Parent Repository
 

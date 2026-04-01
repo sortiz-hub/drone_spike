@@ -19,10 +19,15 @@ def make_env(
     dt: float = 0.1,
     max_steps: int = 1000,
     sensing_mode: str = "truth",
+    obstacles: bool = False,
 ) -> InterceptEnv:
     from drone_intercept.env.termination import TerminationConfig
 
     cfg = TerminationConfig(max_steps=max_steps)
+    obstacle_config = None
+    if obstacles:
+        from drone_intercept.sim.obstacles import ObstacleConfig
+        obstacle_config = ObstacleConfig()
     return Monitor(
         InterceptEnv(
             target_behavior=target_behavior,
@@ -30,6 +35,7 @@ def make_env(
             dt=dt,
             termination=cfg,
             sensing_mode=sensing_mode,
+            obstacle_config=obstacle_config,
         )
     )
 
@@ -47,6 +53,7 @@ def train(
     log_dir: str = "logs",
     seed: int = 42,
     sensing_mode: str = "truth",
+    obstacles: bool = False,
 ) -> PPO:
     """Train a PPO policy on the interception environment."""
     env = make_vec_env(
@@ -54,6 +61,7 @@ def train(
             target_behavior=target_behavior,
             target_speed=target_speed,
             sensing_mode=sensing_mode,
+            obstacles=obstacles,
         ),
         n_envs=n_envs,
         seed=seed,
@@ -103,6 +111,10 @@ def main() -> None:
         choices=["truth", "tracked"],
         help="Sensing mode: truth (Phase 1) or tracked (Phase 2)",
     )
+    parser.add_argument(
+        "--obstacles", action="store_true",
+        help="Enable obstacles in the environment (Phase 3)",
+    )
     args = parser.parse_args()
 
     train(
@@ -116,6 +128,7 @@ def main() -> None:
         log_dir=args.log_dir,
         seed=args.seed,
         sensing_mode=args.sensing_mode,
+        obstacles=args.obstacles,
     )
 
 

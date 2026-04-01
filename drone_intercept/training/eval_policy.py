@@ -23,14 +23,20 @@ def evaluate(
     plot: bool = True,
     seed: int = 0,
     sensing_mode: str = "truth",
+    obstacles: bool = False,
 ) -> dict:
     """Run evaluation episodes and return aggregate metrics."""
+    obstacle_config = None
+    if obstacles:
+        from drone_intercept.sim.obstacles import ObstacleConfig
+        obstacle_config = ObstacleConfig()
     cfg = TerminationConfig()
     env = InterceptEnv(
         target_behavior=target_behavior,
         target_speed=target_speed,
         termination=cfg,
         sensing_mode=sensing_mode,
+        obstacle_config=obstacle_config,
     )
     model = PPO.load(model_path)
     logger = EpisodeLogger(log_dir=log_dir)
@@ -109,6 +115,10 @@ def main() -> None:
         choices=["truth", "tracked"],
         help="Sensing mode: truth (Phase 1) or tracked (Phase 2)",
     )
+    parser.add_argument(
+        "--obstacles", action="store_true",
+        help="Enable obstacles in the environment (Phase 3)",
+    )
     args = parser.parse_args()
 
     evaluate(
@@ -120,6 +130,7 @@ def main() -> None:
         plot=not args.no_plot,
         seed=args.seed,
         sensing_mode=args.sensing_mode,
+        obstacles=args.obstacles,
     )
 
 
