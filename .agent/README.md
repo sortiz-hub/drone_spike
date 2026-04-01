@@ -44,7 +44,10 @@ Full training/eval reference: [sop/development/training-and-evaluation.md](sop/d
 
 ## Current Status
 
-**Phases 1–3** are implemented with simplified dynamics (no PX4/Gazebo dependency). Phase 2 adds noisy detections + Kalman filter (`--sensing-mode tracked`). Phase 3 adds obstacles with sector-distance perception (`--obstacles`).
+**All four phases** are implemented with simplified dynamics (no PX4/Gazebo dependency):
+- Phase 2: noisy detections + Kalman filter (`--sensing-mode tracked`)
+- Phase 3: obstacles with sector-distance perception (`--obstacles`)
+- Phase 4: target prediction for lead pursuit (`--prediction`)
 
 ## Parent Repository
 

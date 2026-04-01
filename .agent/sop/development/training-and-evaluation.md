@@ -43,6 +43,7 @@ python -m drone_intercept.training.train_ppo \
 | `--log-dir` | `logs` | Log directory |
 | `--sensing-mode` | `truth` | `truth` (Phase 1) or `tracked` (Phase 2) |
 | `--obstacles` | (flag) | Enable obstacles (Phase 3) |
+| `--prediction` | (flag) | Enable target prediction (Phase 4) |
 
 ### Training Output
 
@@ -68,6 +69,17 @@ python -m drone_intercept.training.train_ppo --timesteps 500000 --obstacles
 
 # Combine with tracked sensing (Phase 2+3)
 python -m drone_intercept.training.train_ppo --timesteps 500000 --sensing-mode tracked --obstacles
+```
+
+### Training with Prediction (Phase 4)
+
+```bash
+# Train with target prediction (adds predicted positions at t+0.5s, t+1.0s)
+python -m drone_intercept.training.train_ppo --timesteps 500000 --prediction
+
+# Full stack: tracked + obstacles + prediction
+python -m drone_intercept.training.train_ppo --timesteps 500000 \
+  --sensing-mode tracked --obstacles --prediction
 ```
 
 ### Curriculum Training (Progressive Difficulty)

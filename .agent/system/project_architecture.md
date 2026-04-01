@@ -52,6 +52,7 @@ drone_spike/
       noise.py                   # Gaussian noise injection (Phase 2)
       tracker.py                 # Kalman filter target tracker (Phase 2)
       obstacles.py               # Obstacle generation + sector perception (Phase 3)
+      predictor.py               # Constant-velocity target predictor (Phase 4)
     env/
       intercept_env.py           # Gymnasium environment (InterceptEnv)
       observation_builder.py     # Observation vector assembly (14D/15D)
@@ -96,7 +97,7 @@ drone_spike/
 | 1 - Cheated Interception (MVP) | Basic pursuit in open space | Simulator truth | **Implemented** |
 | 2 - Tracked Target | Pursuit under uncertainty | Noisy detections + Kalman | **Implemented** |
 | 3 - Obstacle-Aware | Safe pursuit | Sector distances + tracked target | **Implemented** |
-| 4 - Prediction-Aware | Lead pursuit | Predicted target trajectory | Not started |
+| 4 - Prediction-Aware | Lead pursuit | Predicted target trajectory | **Implemented** |
 
 See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed milestones.
 
@@ -108,7 +109,7 @@ See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed mile
 | Phase 1 dynamics | Simplified first-order lag | Instant training, no simulator setup; swap later |
 | Velocity tracking tau | 0.3s time constant | Mimics realistic autopilot response lag |
 | Action space | Continuous velocity + yaw rate | Natural PX4 Offboard interface |
-| Observation | 14D / 15D / 22D / 23D (phase-dependent) | Compact vector; grows with phase |
+| Observation | 14D–29D (phase-dependent) | Compact vector; grows with phase features |
 | Algorithm | PPO | Proven for continuous control; simple SB3 baseline |
 | Targets | Scripted behaviors | Debuggable curriculum before adversarial |
 
@@ -143,6 +144,17 @@ Appends sector distances to the Phase 1 or Phase 2 vector:
 | 14 or 15 | sector_0 .. sector_N | [0, 20] m | Distance to nearest obstacle per angular sector |
 
 Total dimensions: 22 (truth+obstacles) or 23 (tracked+obstacles) with 8 default sectors.
+
+### Observation — Phase 4 (adds predicted target positions)
+
+Appends relative predicted target positions (constant-velocity extrapolation):
+
+| Index | Field | Range | Description |
+|-------|-------|-------|-------------|
+| +0..+2 | predicted_t05 | [-300, 300] m | Predicted target position at t+0.5s (relative to drone) |
+| +3..+5 | predicted_t10 | [-300, 300] m | Predicted target position at t+1.0s (relative to drone) |
+
+Full stack dimensions: 29 (tracked + 8 sectors + 2 predictions).
 
 ### Action (4D continuous)
 
