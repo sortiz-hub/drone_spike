@@ -80,7 +80,7 @@ Full technical reference: `drone_interception_rl_blueprint.md` (blueprint sectio
 
 **Goal:** Replace simulator truth with noisy detections + Kalman tracker. Policy must handle uncertainty.
 
-**Status:** `not-started`
+**Status:** `implemented`
 
 **Key changes:**
 - Gaussian noise injected into target detections

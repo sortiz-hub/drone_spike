@@ -1,4 +1,8 @@
-"""Gymnasium environment for drone interception (Phase 1 — simplified dynamics)."""
+"""Gymnasium environment for drone interception.
+
+Phase 1 — simplified dynamics with truth sensing.
+Phase 2 — adds noisy detections + Kalman tracker.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +39,10 @@ class InterceptEnv(gym.Env):
     The drone tracks commanded velocity via first-order lag (mimicking an
     autopilot velocity controller). No PX4/Gazebo dependency — designed so
     the dynamics layer can be swapped for ROS 2 + PX4 SITL later.
+
+    Args:
+        sensing_mode: "truth" for Phase 1 (simulator truth) or
+                      "tracked" for Phase 2 (noisy detections + Kalman filter).
     """
 
     metadata = {"render_modes": ["human"]}
@@ -46,11 +54,15 @@ class InterceptEnv(gym.Env):
         dt: float = 0.1,
         termination: TerminationConfig | None = None,
         render_mode: str | None = None,
+        sensing_mode: str = "truth",
+        noise_config: Any | None = None,
+        tracker_config: Any | None = None,
     ) -> None:
         super().__init__()
         self.dt = dt
         self.render_mode = render_mode
         self.term_cfg = termination or TerminationConfig()
+        self.sensing_mode = sensing_mode
 
         # Target
         if target_behavior not in _TARGET_REGISTRY:
@@ -60,8 +72,19 @@ class InterceptEnv(gym.Env):
             )
         self._target = _TARGET_REGISTRY[target_behavior](speed=target_speed)
 
+        # Phase 2: tracker + noise
+        self._tracker = None
+        self._noise_cfg = None
+        if sensing_mode == "tracked":
+            from drone_intercept.sim.noise import NoiseConfig
+            from drone_intercept.sim.tracker import KalmanTracker, TrackerConfig
+
+            self._noise_cfg = noise_config or NoiseConfig()
+            self._tracker = KalmanTracker(tracker_config or TrackerConfig())
+
         # Spaces
-        self.observation_space = observation_builder.observation_space()
+        phase = 2 if sensing_mode == "tracked" else 1
+        self.observation_space = observation_builder.observation_space(phase=phase)
         self.action_space = gym.spaces.Box(
             low=np.array([-_MAX_VEL, -_MAX_VEL, -_MAX_VEL, -_MAX_YAW_RATE], dtype=np.float32),
             high=np.array([_MAX_VEL, _MAX_VEL, _MAX_VEL, _MAX_YAW_RATE], dtype=np.float32),
@@ -102,6 +125,10 @@ class InterceptEnv(gym.Env):
         # Reset target
         self._target.reset(self._rng)
 
+        # Reset tracker
+        if self._tracker is not None:
+            self._tracker.reset()
+
         obs = self._build_obs()
         info = self._build_info(reason="")
         return obs, info
@@ -133,9 +160,20 @@ class InterceptEnv(gym.Env):
         # Advance target
         self._target.step(self.dt)
 
+        # Advance tracker (Phase 2)
+        if self._tracker is not None:
+            from drone_intercept.sim.noise import inject_noise
+
+            self._tracker.predict(self.dt)
+            noisy_pos, noisy_vel = inject_noise(
+                self._target.position, self._target.velocity,
+                self._rng, self._noise_cfg,
+            )
+            self._tracker.update(noisy_pos, noisy_vel)
+
         self._step_count += 1
 
-        # Termination
+        # Termination (always uses true state for ground truth)
         term = check_termination(
             self._drone_pos,
             self._drone_vel,
@@ -168,17 +206,29 @@ class InterceptEnv(gym.Env):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _get_sensed_target(self) -> tuple[np.ndarray, np.ndarray, float | None]:
+        """Return target pos/vel and optional track_confidence based on sensing mode."""
+        if self._tracker is not None:
+            return (
+                self._tracker.position,
+                self._tracker.velocity,
+                self._tracker.confidence,
+            )
+        return self._target.position, self._target.velocity, None
+
     def _build_obs(self) -> np.ndarray:
+        target_pos, target_vel, confidence = self._get_sensed_target()
         return observation_builder.build_observation(
             drone_pos=self._drone_pos,
             drone_vel=self._drone_vel,
-            target_pos=self._target.position,
-            target_vel=self._target.velocity,
+            target_pos=target_pos,
+            target_vel=target_vel,
             battery=self._battery,
+            track_confidence=confidence,
         )
 
     def _build_info(self, reason: str) -> dict[str, Any]:
-        return {
+        info = {
             "drone_pos": self._drone_pos.copy(),
             "drone_vel": self._drone_vel.copy(),
             "target_pos": self._target.position.copy(),
@@ -188,3 +238,8 @@ class InterceptEnv(gym.Env):
             "step": self._step_count,
             "reason": reason,
         }
+        if self._tracker is not None:
+            info["tracked_pos"] = self._tracker.position.copy()
+            info["tracked_vel"] = self._tracker.velocity.copy()
+            info["track_confidence"] = self._tracker.confidence
+        return info
