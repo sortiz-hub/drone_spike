@@ -35,6 +35,9 @@ pip install -e .
 
 # With dev tools (pytest, ruff)
 pip install -e ".[dev]"
+
+# GPU support (CUDA PyTorch) — optional
+pip install -r requirements-cuda.txt
 ```
 
 ### 4. Verify Installation
@@ -54,6 +57,18 @@ Expected output:
 Observation shape: (14,)
 Installation OK
 ```
+
+### 5. Run Validation Scripts
+
+```bash
+python scripts/run_all.py --quick
+```
+
+This runs all validation scripts (01–12) in quick mode. See `.agent/sop/testing/validation-scripts.md` for details.
+
+### VS Code Debugging
+
+The project includes `.vscode/launch.json` for debugging the current file using the local venv Python interpreter.
 
 ## Quick Smoke Test
 

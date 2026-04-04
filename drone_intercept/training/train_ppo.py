@@ -19,12 +19,15 @@ def make_env(
     dt: float = 0.1,
     max_steps: int = 1000,
     sensing_mode: str = "truth",
+    reward_mode: str = "original",
     obstacles: bool = False,
     prediction: bool = False,
 ) -> InterceptEnv:
+    from drone_intercept.env.rewards import RewardConfig
     from drone_intercept.env.termination import TerminationConfig
 
     cfg = TerminationConfig(max_steps=max_steps)
+    reward_cfg = RewardConfig(mode=reward_mode)
     obstacle_config = None
     if obstacles:
         from drone_intercept.sim.obstacles import ObstacleConfig
@@ -42,6 +45,7 @@ def make_env(
             sensing_mode=sensing_mode,
             obstacle_config=obstacle_config,
             predictor_config=predictor_config,
+            reward_config=reward_cfg,
         )
     )
 
@@ -58,16 +62,25 @@ def train(
     save_dir: str = "models",
     log_dir: str = "logs",
     seed: int = 42,
+    device: str = "cpu",
     sensing_mode: str = "truth",
+    reward_mode: str = "shaped",
+    resume: str | None = None,
     obstacles: bool = False,
     prediction: bool = False,
 ) -> PPO:
-    """Train a PPO policy on the interception environment."""
+    """Train a PPO policy on the interception environment.
+
+    Args:
+        resume: Path to a saved model to resume training from.
+                If None, trains from scratch.
+    """
     env = make_vec_env(
         lambda: make_env(
             target_behavior=target_behavior,
             target_speed=target_speed,
             sensing_mode=sensing_mode,
+            reward_mode=reward_mode,
             obstacles=obstacles,
             prediction=prediction,
         ),
@@ -75,19 +88,26 @@ def train(
         seed=seed,
     )
 
-    model = PPO(
-        "MlpPolicy",
-        env,
-        learning_rate=learning_rate,
-        batch_size=batch_size,
-        n_epochs=n_epochs,
-        gamma=gamma,
-        n_steps=2048,
-        ent_coef=0.01,
-        clip_range=0.2,
-        verbose=1,
-        seed=seed,
-    )
+    if resume is None:
+        resume = str(Path(save_dir) / "ppo_intercept_final.zip")
+    if Path(resume).exists():
+        print(f"Resuming from {resume}")
+        model = PPO.load(resume, env=env, device=device)
+    else:
+        model = PPO(
+            "MlpPolicy",
+            env,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            n_steps=2048,
+            ent_coef=0.01,
+            clip_range=0.2,
+            verbose=1,
+            seed=seed,
+            device=device,
+        )
 
     callback = InterceptCallback(
         save_dir=save_dir,
@@ -112,6 +132,11 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--device", type=str, default="auto",
+        choices=["auto", "cuda", "cpu"],
+        help="Device for training: auto (GPU if available), cuda, or cpu",
+    )
     parser.add_argument("--save-dir", type=str, default="models")
     parser.add_argument("--log-dir", type=str, default="logs")
     parser.add_argument(
@@ -127,6 +152,15 @@ def main() -> None:
         "--prediction", action="store_true",
         help="Enable target prediction in observation (Phase 4)",
     )
+    parser.add_argument(
+        "--reward-mode", type=str, default="original",
+        choices=["original", "shaped"],
+        help="Reward function: original (static distance) or shaped (delta + proximity)",
+    )
+    parser.add_argument(
+        "--resume", type=str, default=None,
+        help="Path to saved model to resume training from",
+    )
     args = parser.parse_args()
 
     train(
@@ -139,7 +173,10 @@ def main() -> None:
         save_dir=args.save_dir,
         log_dir=args.log_dir,
         seed=args.seed,
+        device=args.device,
         sensing_mode=args.sensing_mode,
+        reward_mode=args.reward_mode,
+        resume=args.resume,
         obstacles=args.obstacles,
         prediction=args.prediction,
     )

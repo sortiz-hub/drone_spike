@@ -44,6 +44,16 @@ python -m drone_intercept.training.train_ppo \
 | `--sensing-mode` | `truth` | `truth` (Phase 1) or `tracked` (Phase 2) |
 | `--obstacles` | (flag) | Enable obstacles (Phase 3) |
 | `--prediction` | (flag) | Enable target prediction (Phase 4) |
+| `--device` | `cpu` | Compute device: `cpu`, `cuda`, or `auto` |
+| `--reward-mode` | `original` | Reward mode: `original` or `shaped` (see `RewardConfig`) |
+| `--resume` | (flag) | Auto-resume from `models/ppo_intercept_final.zip` if it exists |
+
+### Convenience Script
+
+```bash
+# Full training run via validation script (equivalent to the CLI above)
+python scripts/09_train_full.py
+```
 
 ### Training Output
 
@@ -124,6 +134,7 @@ python -m drone_intercept.training.eval_policy \
 | `--log-dir` | `logs/eval` | Output directory |
 | `--no-plot` | (flag) | Skip trajectory plot generation |
 | `--seed` | 0 | Random seed |
+| `--device` | `cpu` | Compute device: `cpu`, `cuda`, or `auto` |
 
 ### Evaluation Output
 
@@ -131,6 +142,13 @@ python -m drone_intercept.training.eval_policy \
 - **Trajectory plots**: `logs/eval/plot_episode_XXXXX.png` (first 5 episodes)
 - **Episode logs**: `logs/eval/episode_XXXXX.jsonl` (all episodes)
 - **Summary CSV**: `logs/eval/episode_summaries.csv`
+
+### Convenience Script
+
+```bash
+# Evaluate across all target types
+python scripts/10_eval.py --all-targets
+```
 
 ### Cross-Target Generalization Test
 
@@ -182,6 +200,13 @@ for jsonl in sorted(log_dir.glob("episode_*.jsonl"))[:10]:
         save_path=log_dir / f"plot_{jsonl.stem}.png",
         show=False,
     )
+```
+
+### Batch Viewer Script
+
+```bash
+# Interactive batch viewer for episode plots
+python scripts/11_batch_viewer.py
 ```
 
 ### Analyze Episode Summaries

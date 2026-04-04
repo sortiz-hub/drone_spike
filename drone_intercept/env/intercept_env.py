@@ -13,8 +13,10 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 
-from drone_intercept.env import observation_builder, rewards
+from drone_intercept.env import observation_builder
+from drone_intercept.env.rewards import RewardConfig, compute_reward
 from drone_intercept.env.termination import TerminationConfig, check_termination
+from drone_intercept.sim.backends import get_backend_registry
 from drone_intercept.sim.target_behaviors import (
     ConstantVelocityTarget,
     TargetBehavior,
@@ -27,12 +29,6 @@ _TARGET_REGISTRY: dict[str, type[TargetBehavior]] = {
     "waypoint": WaypointTarget,
     "zigzag": ZigzagTarget,
 }
-
-# Simplified drone dynamics constants
-_MAX_VEL = 10.0        # m/s per axis
-_MAX_YAW_RATE = 2.0    # rad/s
-_VEL_TAU = 0.3         # velocity tracking time constant (s)
-_GRAVITY = 9.81
 
 
 class InterceptEnv(gym.Env):
@@ -55,6 +51,7 @@ class InterceptEnv(gym.Env):
         target_behavior: str = "constant_velocity",
         target_speed: float = 5.0,
         dt: float = 0.1,
+        physics_backend: str = "simplified",
         termination: TerminationConfig | None = None,
         render_mode: str | None = None,
         sensing_mode: str = "truth",
@@ -62,12 +59,33 @@ class InterceptEnv(gym.Env):
         tracker_config: Any | None = None,
         obstacle_config: Any | None = None,
         predictor_config: Any | None = None,
+        reward_config: RewardConfig | None = None,
     ) -> None:
         super().__init__()
         self.dt = dt
         self.render_mode = render_mode
         self.term_cfg = termination or TerminationConfig()
         self.sensing_mode = sensing_mode
+        self._reward_cfg = reward_config or RewardConfig()
+
+        # Physics backend
+        backend_registry = get_backend_registry()
+        if physics_backend not in backend_registry:
+            raise ValueError(
+                f"Unknown physics_backend '{physics_backend}'. "
+                f"Choose from: {list(backend_registry)}"
+            )
+        self._backend = backend_registry[physics_backend]()
+        self._is_gazebo = physics_backend == "px4_gazebo"
+
+        # Gazebo target visual (only when using PX4 backend)
+        self._target_visual = None
+        if self._is_gazebo:
+            try:
+                from drone_intercept.sim.gz_target_visual import GzTargetVisual
+                self._target_visual = GzTargetVisual()
+            except ImportError:
+                pass
 
         # Target
         if target_behavior not in _TARGET_REGISTRY:
@@ -118,19 +136,29 @@ class InterceptEnv(gym.Env):
             perception_range=perception_range,
             n_predictions=n_predictions,
         )
-        self.action_space = gym.spaces.Box(
-            low=np.array([-_MAX_VEL, -_MAX_VEL, -_MAX_VEL, -_MAX_YAW_RATE], dtype=np.float32),
-            high=np.array([_MAX_VEL, _MAX_VEL, _MAX_VEL, _MAX_YAW_RATE], dtype=np.float32),
-            dtype=np.float32,
-        )
+        act_low, act_high = self._backend.action_bounds()
+        self.action_space = gym.spaces.Box(low=act_low, high=act_high, dtype=np.float32)
 
-        # State (set in reset)
-        self._drone_pos = np.zeros(3, dtype=np.float32)
-        self._drone_vel = np.zeros(3, dtype=np.float32)
-        self._yaw = 0.0
-        self._battery = 1.0
+        # State (drone state lives in self._backend)
         self._step_count = 0
+        self._prev_distance: float | None = None
         self._rng = np.random.default_rng()
+
+    @property
+    def _drone_pos(self) -> np.ndarray:
+        return self._backend.position
+
+    @property
+    def _drone_vel(self) -> np.ndarray:
+        return self._backend.velocity
+
+    @property
+    def _yaw(self) -> float:
+        return self._backend.yaw
+
+    @property
+    def _battery(self) -> float:
+        return self._backend.battery
 
     def reset(
         self,
@@ -141,22 +169,18 @@ class InterceptEnv(gym.Env):
         super().reset(seed=seed, options=options)
         self._rng = np.random.default_rng(seed)
 
-        # Drone starts near origin, hovering
-        self._drone_pos = np.array(
-            [
-                self._rng.uniform(-2.0, 2.0),
-                self._rng.uniform(-2.0, 2.0),
-                self._rng.uniform(2.0, 4.0),
-            ],
-            dtype=np.float32,
-        )
-        self._drone_vel = np.zeros(3, dtype=np.float32)
-        self._yaw = 0.0
-        self._battery = 1.0
+        # Drone state
+        self._backend.reset(self._rng)
         self._step_count = 0
+        self._prev_distance = None
 
         # Reset target
         self._target.reset(self._rng)
+
+        # Spawn/move target visual in Gazebo
+        if self._target_visual is not None:
+            tp = self._target.position
+            self._target_visual.spawn(float(tp[0]), float(tp[1]), float(tp[2]))
 
         # Reset tracker
         if self._tracker is not None:
@@ -178,28 +202,16 @@ class InterceptEnv(gym.Env):
         self, action: np.ndarray
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         action = np.clip(action, self.action_space.low, self.action_space.high)
-        vel_cmd = action[:3]
-        yaw_rate_cmd = action[3]
 
-        # First-order velocity tracking (simplified autopilot)
-        alpha = 1.0 - np.exp(-self.dt / _VEL_TAU)
-        self._drone_vel = (
-            self._drone_vel + alpha * (vel_cmd - self._drone_vel)
-        ).astype(np.float32)
-
-        # Integrate position
-        self._drone_pos = (self._drone_pos + self._drone_vel * self.dt).astype(
-            np.float32
-        )
-
-        # Yaw
-        self._yaw += float(yaw_rate_cmd) * self.dt
-
-        # Battery drain (simple linear)
-        self._battery = max(0.0, self._battery - 0.0002)
+        # Advance drone dynamics
+        self._backend.step(action, self.dt)
 
         # Advance target
         self._target.step(self.dt)
+
+        # Update target visual in Gazebo
+        if self._target_visual is not None:
+            self._target_visual.update_from_array(self._target.position)
 
         # Advance tracker (Phase 2)
         if self._tracker is not None:
@@ -247,15 +259,18 @@ class InterceptEnv(gym.Env):
 
         # Reward
         distance = float(np.linalg.norm(self._target.position - self._drone_pos))
-        reward = rewards.compute_reward(
+        reward = compute_reward(
             distance=distance,
             action=action,
             captured=captured,
             crashed=crashed,
             altitude=float(self._drone_pos[2]),
+            prev_distance=self._prev_distance,
             min_obstacle_distance=min_obstacle_dist,
             obstacle_crashed=obstacle_crashed,
+            config=self._reward_cfg,
         )
+        self._prev_distance = distance
 
         obs = self._build_obs()
         info = self._build_info(term.reason)
@@ -263,6 +278,11 @@ class InterceptEnv(gym.Env):
         info["captured"] = captured
 
         return obs, reward, term.terminated, term.truncated, info
+
+    def close(self) -> None:
+        if hasattr(self._backend, "close"):
+            self._backend.close()
+        super().close()
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -2,7 +2,7 @@
 
 Drone interception RL spike — training pursuit-evasion policies with Gymnasium + SB3.
 
-**Last Updated:** 2026-03-31
+**Last Updated:** 2026-04-03
 
 ---
 
@@ -14,9 +14,11 @@ Drone interception RL spike — training pursuit-evasion policies with Gymnasium
 ├── system/
 │   └── project_architecture.md        # Architecture, obs/action/reward, project structure
 ├── sop/
-│   └── development/
-│       ├── local-setup.md             # Installation, virtual env, smoke test
-│       └── training-and-evaluation.md # Train, eval, view logs/plots, CLI reference
+│   ├── development/
+│   │   ├── local-setup.md             # Installation, virtual env, smoke test
+│   │   └── training-and-evaluation.md # Train, eval, view logs/plots, CLI reference
+│   └── testing/
+│       └── validation-scripts.md      # Scripts 01–12 reference and usage
 └── specs/
     ├── SPEC025-drone-interception-rl/  # Interception RL spec (4 phases)
     │   ├── requirements.md            # Requirements & user stories
@@ -32,9 +34,11 @@ Drone interception RL spike — training pursuit-evasion policies with Gymnasium
 ## Quick Start
 
 1. **Install**: `pip install -e ".[dev]"` — see [sop/development/local-setup.md](sop/development/local-setup.md)
-2. **Train**: `python -m drone_intercept.training.train_ppo --timesteps 500000`
-3. **Evaluate**: `python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip`
-4. **View plots**: Open `logs/eval/plot_episode_XXXXX.png` or use `plot_episode_from_file()`
+2. **Validate**: `python scripts/run_all.py --quick` — runs all validation scripts
+3. **Train**: `python -m drone_intercept.training.train_ppo --timesteps 500000`
+4. **Evaluate**: `python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip`
+5. **View plots**: Open `logs/eval/plot_episode_XXXXX.png` or use `plot_episode_from_file()`
+6. **Docker (PX4 + Gazebo)**: `cd docker && docker compose up -d` — see `docker/` for details
 
 Full training/eval reference: [sop/development/training-and-evaluation.md](sop/development/training-and-evaluation.md)
 
@@ -44,10 +48,13 @@ Full training/eval reference: [sop/development/training-and-evaluation.md](sop/d
 
 ## Current Status
 
-**All four phases** are implemented with simplified dynamics (no PX4/Gazebo dependency):
+**All four phases** are implemented with simplified dynamics. Docker-based PX4 + Gazebo + ROS 2 Humble infrastructure is operational for Phase 2+ integration.
+
 - Phase 2: noisy detections + Kalman filter (`--sensing-mode tracked`)
 - Phase 3: obstacles with sector-distance perception (`--obstacles`)
 - Phase 4: target prediction for lead pursuit (`--prediction`)
+- Physics backend abstraction (`sim/backends/`) enables toggling between simplified and future Gazebo dynamics
+- Validation scripts (`scripts/01–12`) cover end-to-end verification
 
 ## Parent Repository
 

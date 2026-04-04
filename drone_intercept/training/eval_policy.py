@@ -22,6 +22,7 @@ def evaluate(
     log_dir: str = "logs/eval",
     plot: bool = True,
     seed: int = 0,
+    device: str = "cpu",
     sensing_mode: str = "truth",
     obstacles: bool = False,
     prediction: bool = False,
@@ -44,7 +45,7 @@ def evaluate(
         obstacle_config=obstacle_config,
         predictor_config=predictor_config,
     )
-    model = PPO.load(model_path)
+    model = PPO.load(model_path, device=device)
     logger = EpisodeLogger(log_dir=log_dir)
 
     successes = 0
@@ -117,6 +118,11 @@ def main() -> None:
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--device", type=str, default="cpu",
+        choices=["auto", "cuda", "cpu"],
+        help="Device for inference: cpu (default), cuda, or auto",
+    )
+    parser.add_argument(
         "--sensing-mode", type=str, default="truth",
         choices=["truth", "tracked"],
         help="Sensing mode: truth (Phase 1) or tracked (Phase 2)",
@@ -139,6 +145,7 @@ def main() -> None:
         log_dir=args.log_dir,
         plot=not args.no_plot,
         seed=args.seed,
+        device=args.device,
         sensing_mode=args.sensing_mode,
         obstacles=args.obstacles,
         prediction=args.prediction,

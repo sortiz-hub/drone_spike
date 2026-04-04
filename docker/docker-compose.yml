@@ -1,0 +1,35 @@
+services:
+  px4-gazebo:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: drone-sim
+    privileged: true
+    environment:
+      - DISPLAY=host.docker.internal:0.0
+      - LIBGL_ALWAYS_INDIRECT=0
+      - QT_X11_NO_MITSHM=1
+      # PX4
+      - PX4_HOME_LAT=47.397742
+      - PX4_HOME_LON=8.545594
+      - PX4_HOME_ALT=488.0
+    volumes:
+      # Mount project code into container
+      - ..:/workspace/drone_spike
+      # X11 socket (for GUI)
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    ports:
+      # MAVLink UDP
+      - "14540:14540/udp"
+      - "14550:14550/udp"
+      # Gazebo transport
+      - "11345:11345"
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

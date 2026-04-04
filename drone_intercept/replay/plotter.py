@@ -20,12 +20,14 @@ def plot_episode(
     """Plot 2D top-down view of drone and target trajectories."""
     drone_x = [s.drone_pos[0] for s in steps]
     drone_y = [s.drone_pos[1] for s in steps]
+    drone_z = [s.drone_pos[2] for s in steps]
     target_x = [s.target_pos[0] for s in steps]
     target_y = [s.target_pos[1] for s in steps]
+    target_z = [s.target_pos[2] for s in steps]
     distances = [s.distance for s in steps]
     rewards = [s.reward for s in steps]
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(1, 4, figsize=(24, 6))
 
     # --- Trajectory plot ---
     ax = axes[0]
@@ -59,12 +61,26 @@ def plot_episode(
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
 
-    # --- Reward over time ---
+    # --- Altitude over time ---
     ax = axes[2]
+    ax.plot(timesteps, drone_z, "b-", linewidth=1.5, label="Drone")
+    ax.plot(timesteps, target_z, "r--", linewidth=1.5, label="Target")
+    ax.set_xlabel("Step")
+    ax.set_ylabel("Altitude (m)")
+    ax.set_title("Altitude Over Time")
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+    # --- Reward over time (clip y-axis to avoid capture bonus crushing scale) ---
+    ax = axes[3]
     ax.plot(timesteps, rewards, "m-", linewidth=1)
     ax.set_xlabel("Step")
     ax.set_ylabel("Reward")
     ax.set_title("Reward Over Time")
+    r_arr = np.array(rewards)
+    r_lo, r_hi = np.percentile(r_arr, [1, 99])
+    r_pad = max(0.1, 0.1 * (r_hi - r_lo))
+    ax.set_ylim(r_lo - r_pad, r_hi + r_pad)
     ax.grid(True, alpha=0.3)
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
@@ -93,11 +109,14 @@ def animate_episode(
     """
     drone_x = [s.drone_pos[0] for s in steps]
     drone_y = [s.drone_pos[1] for s in steps]
+    drone_z = [s.drone_pos[2] for s in steps]
     target_x = [s.target_pos[0] for s in steps]
     target_y = [s.target_pos[1] for s in steps]
+    target_z = [s.target_pos[2] for s in steps]
     distances = [s.distance for s in steps]
+    rewards = [s.reward for s in steps]
 
-    fig, (ax_traj, ax_dist) = plt.subplots(1, 2, figsize=(14, 6))
+    fig, (ax_traj, ax_dist, ax_alt, ax_rew) = plt.subplots(1, 4, figsize=(28, 6))
 
     # Compute axis limits with padding
     all_x = drone_x + target_x
@@ -120,6 +139,27 @@ def animate_episode(
     ax_dist.legend(fontsize=8)
     ax_dist.grid(True, alpha=0.3)
 
+    # --- Altitude panel ---
+    all_z = drone_z + target_z
+    ax_alt.set_xlim(0, len(steps))
+    z_pad = max(1.0, 0.1 * (max(all_z) - min(all_z)))
+    ax_alt.set_ylim(min(all_z) - z_pad, max(all_z) + z_pad)
+    ax_alt.set_xlabel("Step")
+    ax_alt.set_ylabel("Altitude (m)")
+    ax_alt.set_title("Altitude Over Time")
+    ax_alt.grid(True, alpha=0.3)
+
+    # --- Reward panel (clip y-axis to avoid capture bonus crushing scale) ---
+    ax_rew.set_xlim(0, len(steps))
+    r_arr = np.array(rewards)
+    r_lo, r_hi = float(np.percentile(r_arr, 1)), float(np.percentile(r_arr, 99))
+    rew_pad = max(0.1, 0.1 * (r_hi - r_lo))
+    ax_rew.set_ylim(r_lo - rew_pad, r_hi + rew_pad)
+    ax_rew.set_xlabel("Step")
+    ax_rew.set_ylabel("Reward")
+    ax_rew.set_title("Reward Over Time")
+    ax_rew.grid(True, alpha=0.3)
+
     fig.suptitle(title, fontsize=14, fontweight="bold")
     plt.tight_layout()
 
@@ -129,6 +169,10 @@ def animate_episode(
     (drone_dot,) = ax_traj.plot([], [], "bo", markersize=8)
     (target_dot,) = ax_traj.plot([], [], "r^", markersize=8)
     (dist_line,) = ax_dist.plot([], [], "k-", linewidth=1)
+    (drone_alt,) = ax_alt.plot([], [], "b-", linewidth=1.5, label="Drone")
+    (target_alt,) = ax_alt.plot([], [], "r--", linewidth=1.5, label="Target")
+    ax_alt.legend(fontsize=8)
+    (rew_line,) = ax_rew.plot([], [], "m-", linewidth=1)
     ax_traj.legend(fontsize=8)
 
     def update(frame: int):  # noqa: ANN202
@@ -138,7 +182,10 @@ def animate_episode(
         drone_dot.set_data([drone_x[frame]], [drone_y[frame]])
         target_dot.set_data([target_x[frame]], [target_y[frame]])
         dist_line.set_data(np.arange(i), distances[:i])
-        return drone_trail, target_trail, drone_dot, target_dot, dist_line
+        drone_alt.set_data(np.arange(i), drone_z[:i])
+        target_alt.set_data(np.arange(i), target_z[:i])
+        rew_line.set_data(np.arange(i), rewards[:i])
+        return drone_trail, target_trail, drone_dot, target_dot, dist_line, drone_alt, target_alt, rew_line
 
     anim = animation.FuncAnimation(
         fig, update, frames=len(steps), interval=1000 // fps, blit=True,

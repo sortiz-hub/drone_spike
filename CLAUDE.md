@@ -25,6 +25,19 @@ python -m drone_intercept.training.eval_policy models/ppo_intercept_final.zip --
 
 # Plot a logged episode
 python -c "from drone_intercept.replay.plotter import plot_episode_from_file; plot_episode_from_file('logs/eval/episode_00000.jsonl')"
+
+# Run all validation scripts (quick mode)
+python scripts/run_all.py --quick
+
+# Full training via script
+python scripts/09_train_full.py
+
+# Evaluate across all targets
+python scripts/10_eval.py --all-targets
+
+# Docker (PX4 + Gazebo + ROS 2 Humble)
+cd docker && docker compose up -d
+docker exec -it drone-sim bash
 ```
 
 ## Scope and Focus
@@ -62,11 +75,15 @@ Before answering architecture questions or implementing features:
 drone_intercept/
   env/intercept_env.py        # Gymnasium environment (InterceptEnv)
   env/observation_builder.py  # 14D obs vector
-  env/rewards.py              # Reward: distance + effort + capture/crash
+  env/rewards.py              # Reward: distance + effort + capture/crash (original & shaped modes)
   env/termination.py          # Capture / crash / timeout / OOB
+  sim/backends/base.py        # Physics backend ABC
+  sim/backends/simplified.py  # First-order velocity model (default)
   sim/target_behaviors/       # ConstantVelocity, Waypoint, Zigzag
-  training/train_ppo.py       # CLI training entry point
+  training/train_ppo.py       # CLI training entry point (supports --resume, --device)
   training/eval_policy.py     # CLI evaluation entry point
   replay/logger.py            # JSONL episode logger
   replay/plotter.py           # 2D trajectory plotter
+scripts/                      # Validation scripts 01–12 + run_all.py
+docker/                       # Dockerfile + docker-compose.yml (PX4 + Gazebo + ROS 2)
 ```

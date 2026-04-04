@@ -44,6 +44,9 @@ SB3 PPO (training) or trained policy (inference)
 drone_spike/
   drone_intercept/               # Main Python package
     sim/
+      backends/
+        base.py                  # PhysicsBackend ABC
+        simplified.py            # First-order velocity model (default)
       target_behaviors/
         base.py                  # TargetBehavior ABC
         constant_velocity.py     # Straight-line target
@@ -68,6 +71,12 @@ drone_spike/
     ros2_nodes/                  # ROS 2 integration (placeholder)
   models/                        # Saved policy checkpoints (gitignored)
   logs/                          # Training logs and episode data (gitignored)
+  scripts/                       # Validation scripts 01–12 + run_all.py
+  docker/
+    Dockerfile                   # PX4 + Gazebo + ROS 2 Humble image
+    docker-compose.yml           # Container orchestration
+  requirements-cuda.txt          # GPU PyTorch install (--extra-index-url)
+  .vscode/launch.json            # Debug config for current file with venv
   pyproject.toml                 # Package config + dependencies
 ```
 
@@ -82,6 +91,22 @@ drone_spike/
 | Visualization | matplotlib | 2D trajectory plots |
 | Language | Python 3.10+ | All application code |
 
+### Physics Backend Abstraction
+
+`InterceptEnv` accepts a `physics_backend` parameter to select the dynamics implementation:
+
+- **`simplified`** (default) — First-order velocity lag model (`sim/backends/simplified.py`). No external dependencies.
+- Future backends (e.g., Gazebo) will implement the same `PhysicsBackend` ABC (`sim/backends/base.py`).
+
+### Reward Modes
+
+`env/rewards.py` supports two modes via `RewardConfig`:
+
+- **`original`** — Distance penalty + effort penalty + capture/crash bonuses (the default from Phase 1).
+- **`shaped`** — Enhanced shaping with smoother distance gradients and additional terms for training stability.
+
+Select with `--reward-mode original|shaped` on the training CLI.
+
 ### Future Stack (Phase 2+)
 
 | Component | Technology | Purpose |
@@ -90,7 +115,19 @@ drone_spike/
 | Flight controller | PX4 SITL | State estimation, stabilization, offboard |
 | Middleware | ROS 2 | Node communication |
 
-## 6. Phased Approach
+## 6. Docker Infrastructure
+
+The `docker/` directory provides a containerized PX4 + Gazebo + ROS 2 Humble environment for Phase 2+ development:
+
+```bash
+cd docker && docker compose up -d    # Start simulator stack
+docker exec -it drone-sim bash       # Shell into the container
+```
+
+- `docker/Dockerfile` — Builds an image with PX4 SITL, Gazebo, and ROS 2 Humble
+- `docker/docker-compose.yml` — Orchestrates the container with proper volume mounts and network config
+
+## 7. Phased Approach
 
 | Phase | Focus | Sensing | Status |
 |-------|-------|---------|--------|
@@ -101,7 +138,7 @@ drone_spike/
 
 See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed milestones.
 
-## 7. Key Design Decisions
+## 8. Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
@@ -113,7 +150,7 @@ See `specs/SPEC025-drone-interception-rl/delivery-strategy.md` for detailed mile
 | Algorithm | PPO | Proven for continuous control; simple SB3 baseline |
 | Targets | Scripted behaviors | Debuggable curriculum before adversarial |
 
-## 8. Observation, Action, Reward Reference
+## 9. Observation, Action, Reward Reference
 
 ### Observation — Phase 1 (14D vector, sensing_mode="truth")
 

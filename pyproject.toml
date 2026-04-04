@@ -12,10 +12,13 @@ dependencies = [
     "stable-baselines3>=2.1",
     "numpy>=1.24",
     "matplotlib>=3.7",
+    "torch>=2.2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.1"]
+cuda = ["torch>=2.2"]
 
 [tool.setuptools.packages.find]
 include = ["drone_intercept*"]
+
