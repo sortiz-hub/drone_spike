@@ -90,7 +90,7 @@ RUN cd /opt/PX4-Autopilot && \
 # -------------------------------------------------------
 # 5. Python deps for drone_intercept
 # -------------------------------------------------------
-RUN pip3 install --no-cache-dir gymnasium stable-baselines3 numpy matplotlib torch opencv-python-headless --extra-index-url https://download.pytorch.org/whl/cpu && \
+RUN pip3 install --no-cache-dir gymnasium stable-baselines3 numpy matplotlib torch opencv-python-headless PyFlyt --extra-index-url https://download.pytorch.org/whl/cpu && \
     pip3 install --no-cache-dir --upgrade setuptools pip numpy
 
 # -------------------------------------------------------
