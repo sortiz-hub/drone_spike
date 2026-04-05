@@ -27,13 +27,23 @@ class RewardConfig:
         delta_weight: (shaped only) Weight for distance-closing reward.
     """
 
-    mode: str = "original"
-    capture_bonus: float = 10.0
-    crash_penalty: float = 10.0
+    mode: str = "shaped"
+    capture_bonus: float | None = None   # None = use mode default
+    crash_penalty: float | None = None   # None = use mode default
     effort_weight: float = 0.01
     # shaped mode
     proximity_scale: float = 5.0
     delta_weight: float = 1.0
+
+    def effective_capture_bonus(self) -> float:
+        if self.capture_bonus is not None:
+            return self.capture_bonus
+        return 100.0 if self.mode == "original" else 10.0
+
+    def effective_crash_penalty(self) -> float:
+        if self.crash_penalty is not None:
+            return self.crash_penalty
+        return 100.0 if self.mode == "original" else 10.0
 
 
 def compute_reward(
@@ -93,11 +103,11 @@ def _reward_original(
     if min_obstacle_distance is not None and min_obstacle_distance < 3.0:
         reward -= 0.1 * max(0.0, 3.0 - min_obstacle_distance)
 
-    # Terminal bonuses
+    # Terminal bonuses (original: +100/-100)
     if captured:
-        reward += cfg.capture_bonus
+        reward += cfg.effective_capture_bonus()
     if crashed or obstacle_crashed:
-        reward -= cfg.crash_penalty
+        reward -= cfg.effective_crash_penalty()
 
     return reward
 
@@ -144,10 +154,10 @@ def _reward_shaped(
     if min_obstacle_distance is not None and min_obstacle_distance < 3.0:
         reward -= 0.1 * max(0.0, 3.0 - min_obstacle_distance)
 
-    # Terminal bonuses
+    # Terminal bonuses (shaped: +10/-10)
     if captured:
-        reward += cfg.capture_bonus
+        reward += cfg.effective_capture_bonus()
     if crashed or obstacle_crashed:
-        reward -= cfg.crash_penalty
+        reward -= cfg.effective_crash_penalty()
 
     return reward

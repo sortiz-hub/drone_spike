@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dri \
     mesa-utils \
     x11-apps \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # -------------------------------------------------------
@@ -84,7 +85,7 @@ RUN cd /opt/PX4-Autopilot && \
     bash Tools/setup/ubuntu.sh --no-nuttx && \
     sed -i "s/nuttx_git_tags)\[-1\]/nuttx_git_tags)[-1] if nuttx_git_tags else 'v0.0.0'/" \
         src/lib/version/px_update_git_header.py && \
-    make px4_sitl gz_x500 || true
+    make px4_sitl_default || true
 
 # -------------------------------------------------------
 # 5. Python deps for drone_intercept

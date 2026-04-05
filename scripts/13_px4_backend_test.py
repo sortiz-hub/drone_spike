@@ -1,3 +1,8 @@
+import warnings
+warnings.filterwarnings("ignore", message="Unable to import Axes3D")
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.protobuf")
+
 """Step 13: Test the PX4 Gazebo physics backend with InterceptEnv.
 
 Run INSIDE the Docker container (with PX4 SITL + MAVROS running):
@@ -25,8 +30,8 @@ from drone_intercept.env.termination import TerminationConfig
 
 
 def main():
-    # Shorter episodes for testing
-    cfg = TerminationConfig(max_steps=100)
+    # Shorter episodes, larger arena for Gazebo
+    cfg = TerminationConfig(max_steps=100, arena_radius=500.0, max_altitude=100.0)
 
     print("Creating InterceptEnv with physics_backend='px4_gazebo'...")
     env = InterceptEnv(

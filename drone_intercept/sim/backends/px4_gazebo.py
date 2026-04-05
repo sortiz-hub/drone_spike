@@ -218,20 +218,40 @@ class PX4GazeboBackend(PhysicsBackend):
         if self._mavros_state.armed:
             self._stream_setpoints(0.0, 0.0, -1.5, duration=5.0)
             self._arm(False)
-            time.sleep(1.0)
+            time.sleep(2.0)
+
+        # Wait for PX4 estimator to stabilize
+        self._node.get_logger().info("Waiting for estimator to stabilize...")
+        time.sleep(3.0)
 
         # Pre-stream setpoints (PX4 requires this before Offboard)
         self._stream_setpoints(0.0, 0.0, 0.0, duration=self.cfg.pre_stream_duration)
 
-        # Switch to OFFBOARD
-        self._set_mode("OFFBOARD")
-        self._stream_setpoints(0.0, 0.0, 0.0, duration=0.5)
+        # Retry loop: set OFFBOARD + arm (PX4 can reject if not ready)
+        armed = False
+        for attempt in range(5):
+            # Must keep streaming setpoints during mode switch + arming
+            self._set_mode("OFFBOARD")
+            self._stream_setpoints(0.0, 0.0, 0.0, duration=0.5)
 
-        # Arm
-        self._arm(True)
-        time.sleep(0.5)
+            self._arm(True)
+            self._stream_setpoints(0.0, 0.0, 0.0, duration=1.0)
+
+            if self._mavros_state.armed and self._mavros_state.mode == "OFFBOARD":
+                armed = True
+                self._node.get_logger().info(f"Armed in OFFBOARD on attempt {attempt + 1}")
+                break
+            self._node.get_logger().warn(
+                f"Attempt {attempt + 1}: armed={self._mavros_state.armed}, "
+                f"mode={self._mavros_state.mode} — retrying..."
+            )
+            time.sleep(1.0)
+
+        if not armed:
+            self._node.get_logger().error("Failed to arm after 5 attempts")
 
         # Takeoff — climb to hover altitude
+        self._node.get_logger().info(f"Taking off to {self.cfg.hover_alt}m...")
         deadline = time.time() + self.cfg.reset_timeout
         while time.time() < deadline:
             alt = float(self.position[2]) if self._pose_msg else 0.0
@@ -242,6 +262,9 @@ class PX4GazeboBackend(PhysicsBackend):
 
         # Stabilize at hover
         self._stream_setpoints(0.0, 0.0, 0.0, duration=_SETTLE_TIME)
+
+        alt = float(self.position[2]) if self._pose_msg else 0.0
+        self._node.get_logger().info(f"Reset complete. Alt={alt:.1f}m, armed={self._mavros_state.armed}")
 
         # Battery is not simulated in PX4 SITL — keep at 1.0
         self.battery = 1.0

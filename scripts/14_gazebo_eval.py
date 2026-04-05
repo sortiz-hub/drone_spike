@@ -1,3 +1,8 @@
+import warnings
+warnings.filterwarnings("ignore", message="Unable to import Axes3D")
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.protobuf")
+
 """Step 14: Evaluate a trained model in PX4+Gazebo with visual target.
 
 Loads a model trained with the simplified backend and runs it against
@@ -58,7 +63,11 @@ def main():
     print(f"Loading model: {model_path}")
     model = PPO.load(model_path, device="cpu")
 
-    cfg = TerminationConfig(max_steps=args.max_steps)
+    cfg = TerminationConfig(
+        max_steps=args.max_steps,
+        arena_radius=500.0,    # larger arena for Gazebo (real sim distances)
+        max_altitude=100.0,
+    )
     print(f"Creating PX4+Gazebo env (target={args.target}, speed={args.target_speed})...")
     env = InterceptEnv(
         physics_backend="px4_gazebo",
@@ -124,8 +133,8 @@ def main():
                 plot_path = Path(args.log_dir) / f"plot_ep{ep:03d}_{result_str.lower()}.png"
                 plot_episode(steps, title=f"Gazebo Ep {ep} ({result_str})",
                              save_path=plot_path, show=False)
-                # Animated replay (gif — no ffmpeg needed)
-                vid_path = Path(args.log_dir) / f"video_ep{ep:03d}_{result_str.lower()}.gif"
+                # Animated replay (mp4 if ffmpeg available, gif fallback)
+                vid_path = Path(args.log_dir) / f"video_ep{ep:03d}_{result_str.lower()}.mp4"
                 animate_episode(steps, save_path=vid_path, fps=10,
                                 title=f"Gazebo Ep {ep} ({result_str})")
                 print(f"  Plot: {plot_path}")

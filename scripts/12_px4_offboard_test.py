@@ -1,3 +1,8 @@
+import warnings
+warnings.filterwarnings("ignore", message="Unable to import Axes3D")
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.protobuf")
+
 """Step 12: PX4 Offboard velocity control test.
 
 Run INSIDE the Docker container (with PX4 SITL + MAVROS running):
