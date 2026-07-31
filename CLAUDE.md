@@ -61,29 +61,9 @@ Before answering architecture questions or implementing features:
 1. **READ `.agent/README.md`** for documentation navigation
 2. **CHECK `.agent/specs/`** for existing feature specs before planning new work
 
-## Tech Stack
-
-- **Dynamics**: Simplified first-order velocity model (Phase 1), Gazebo + PX4 SITL (Phase 2+)
-- **RL Interface**: Python Gymnasium
-- **Training**: Stable-Baselines3 (PPO)
-- **Visualization**: matplotlib (2D trajectory plots)
-- **Language**: Python 3.10+
-
 ## Key Modules
 
-```
-drone_intercept/
-  env/intercept_env.py        # Gymnasium environment (InterceptEnv)
-  env/observation_builder.py  # 14D obs vector
-  env/rewards.py              # Reward: distance + effort + capture/crash (original & shaped modes)
-  env/termination.py          # Capture / crash / timeout / OOB
-  sim/backends/base.py        # Physics backend ABC
-  sim/backends/simplified.py  # First-order velocity model (default)
-  sim/target_behaviors/       # ConstantVelocity, Waypoint, Zigzag
-  training/train_ppo.py       # CLI training entry point (supports --resume, --device)
-  training/eval_policy.py     # CLI evaluation entry point
-  replay/logger.py            # JSONL episode logger
-  replay/plotter.py           # 2D trajectory plotter
-scripts/                      # Validation scripts 01–12 + run_all.py
-docker/                       # Dockerfile + docker-compose.yml (PX4 + Gazebo + ROS 2)
-```
+Everything lives under `drone_intercept/` (`env/`, `sim/`, `training/`, `replay/`).
+Two non-obvious details: the observation vector is **14D**, and `env/rewards.py`
+carries two reward modes (`original` and `shaped`) — check which one a run used
+before comparing results.
