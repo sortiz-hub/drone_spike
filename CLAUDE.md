@@ -45,21 +45,6 @@ docker exec -it drone-sim bash
 - This is a standalone spike repo for drone interception RL experimentation
 - Part of the RL-EnergyPlus platform ecosystem (parent: `rl-platform-root`)
 
-## AI Behavior Guidelines
-
-### Git Operations
-- **DO NOT** propose or attempt git commit operations unless explicitly requested
-- **DO NOT** run destructive git commands unless explicitly requested
-- Follow commit message conventions: `type: description` (docs, feat, fix, chore, refactor)
-
-### Services and Containers
-- **DO NOT** start long-running services (PX4 SITL, Gazebo, ROS 2, training runs) unless explicitly requested
-
-### Documentation Usage
-Before answering architecture questions or implementing features:
-1. **READ `.agent/README.md`** for documentation navigation
-2. **CHECK `.agent/specs/`** for existing feature specs before planning new work
-
 ## Key Modules
 
 Everything lives under `drone_intercept/` (`env/`, `sim/`, `training/`, `replay/`).
