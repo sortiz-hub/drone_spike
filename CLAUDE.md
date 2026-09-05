@@ -44,7 +44,6 @@ docker exec -it drone-sim bash
 
 - This is a standalone spike repo for drone interception RL experimentation
 - Part of the RL-EnergyPlus platform ecosystem (parent: `rl-platform-root`)
-- When asked to investigate or search, **start in this repo** unless told otherwise
 
 ## AI Behavior Guidelines
 
