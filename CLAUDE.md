@@ -43,7 +43,7 @@ docker exec -it drone-sim bash
 ## Scope and Focus
 
 - This is a standalone spike repo for drone interception RL experimentation
-- Part of the RL-EnergyPlus platform ecosystem (parent: `rl-platform-root`)
+- Part of the RL-EnergyPlus platform ecosystem (parent: `rl-energyplus`)
 
 ## Key Modules
 
