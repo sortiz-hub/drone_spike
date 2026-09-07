@@ -1,12 +1,12 @@
 # CLAUDE.md
 
-This file provides behavioral rules for Claude Code. For project documentation, see **`.agent/README.md`**.
+This file provides behavioral rules for Claude Code. For project documentation, see `.agent/README.md`.
 
 ---
 
 ## Project
 
-**drone_spike** — Drone interception RL spike. Training pursuit-evasion policies using Gymnasium + Stable-Baselines3 (PPO). Phase 1 uses simplified dynamics; Phase 2+ will integrate PX4 + Gazebo + ROS 2.
+drone_spike is a drone interception RL spike. Training pursuit-evasion policies using Gymnasium + Stable-Baselines3 (PPO). Phase 1 uses simplified dynamics; Phase 2+ will integrate PX4 + Gazebo + ROS 2.
 
 ## Quick Commands
 
@@ -48,6 +48,6 @@ docker exec -it drone-sim bash
 ## Key Modules
 
 Everything lives under `drone_intercept/` (`env/`, `sim/`, `training/`, `replay/`).
-Two non-obvious details: the observation vector is **14D**, and `env/rewards.py`
-carries two reward modes (`original` and `shaped`) — check which one a run used
+Two non-obvious details: the observation vector is 14D, and `env/rewards.py`
+carries two reward modes (`original` and `shaped`); check which one a run used
 before comparing results.
